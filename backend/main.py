@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from backend.api.routes import router as api_router
-
-
+from backend.api.game_routes import router as game_router
 def create_app() -> FastAPI:
     app = FastAPI(title="quantum-edu-platform")
 
@@ -17,6 +16,8 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router, prefix="/api")
+    # 将游戏相关的接口挂载到 /api/quantum-game 路径下
+    app.include_router(game_router,prefix="/api/quantum-game",tags=["Quantum Game"])
 
     @app.get("/", response_class=HTMLResponse)
     def home():
