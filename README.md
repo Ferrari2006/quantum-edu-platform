@@ -5,31 +5,29 @@
 ### 目录结构
 
 - backend/：FastAPI 后端与 RAG 占位模块
-- frontend/：Web 前端（需要 Node.js）
-- games/：游戏子项目占位（Phaser/Pygame 等）
+- frontend/：Web 前端
+- games/：游戏子项目（已整合两套 Pygame Demo）
 - docs/：文档
 
 ### 本地运行（后端）
 
-在 `backend/` 下创建虚拟环境并安装依赖：
+在项目根目录执行：
 
 ```bash
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
+python -m venv backend/.venv
+backend/.venv/Scripts/python -m pip install -r backend/requirements.txt
+backend/.venv/Scripts/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 启动后访问：
 
 - http://127.0.0.1:8001/
 - http://127.0.0.1:8001/docs
-- http://127.0.0.1:8001/health
-- http://127.0.0.1:8001/api/health
+- http://127.0.0.1:8001/openapi.json
 
 ### 本地运行（前端）
 
-前端需要安装 Node.js（含 npm）。
+前端需要安装 Node.js（含 npm）。在项目根目录执行：
 
 ```bash
 cd frontend
@@ -37,4 +35,31 @@ npm install
 npm run dev
 ```
 
-默认会访问后端 `http://127.0.0.1:8001`，并通过 Vite 代理转发 `/api`。
+如遇到 PowerShell 禁止运行脚本导致 npm 无法执行，可以用以下任意一种方式：
+
+```bash
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+或使用 `npm.cmd`：
+
+```bash
+cd frontend
+"C:\Program Files\nodejs\npm.cmd" install
+"C:\Program Files\nodejs\npm.cmd" run dev
+```
+
+启动后访问：
+
+- http://127.0.0.1:5173/#/
+- http://127.0.0.1:5173/#/game
+- http://127.0.0.1:5173/docs
+
+### games 子项目
+
+平台已整合两套 Pygame 版本的量子游戏源码（桌面运行）：
+
+- game1（2-qubit demo）：`games/game1/quantum_balatro/main.py`
+- game2（easyver 原版）：`games/game2/quantum_balatro_original/display_engine.py`
+
+前端 Game 页面会展示并提供一键复制运行命令（由后端 `GET /api/games` 提供数据）。
