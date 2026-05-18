@@ -1,12 +1,15 @@
 # quantum-edu-platform
 
-量智启学（Quantum Edu Platform）平台总仓：以 FastAPI 为后端、Vite + React 为前端，统一承载接口文档、知识检索（RAG）占位链路，以及已实现的量子计算教育游戏 Demo。
+> "In the quantum realm, the house always loses... if you can maintain coherence."
+
+量智启学（Quantum Edu Platform）平台总仓：以 FastAPI 为后端、Vite + React 为前端，统一承载平台页面、自动生成的 API 文档（Swagger UI）、以及已实现的量子计算教育游戏 Demo（games 子项目）。
 
 ## 功能概览
 
-- **后端服务**：FastAPI，提供健康检查、游戏清单、RAG/量子计算相关接口占位，并自动生成 OpenAPI 文档（Swagger UI）。
-- **前端站点**：Vite + React，提供 Home / QA / Game 页面；Game 页面会读取后端的游戏清单并展示一键复制运行命令。
-- **games 子项目**：已整合两套 Pygame 量子游戏源码（桌面运行），用于教学演示与玩法验证。
+- **平台后端**：FastAPI（自动生成 OpenAPI / Swagger UI，可在页面内直接测试请求）。
+- **平台前端**：Vite + React，提供 Home / QA / Game 页面。
+- **游戏 Demo**：已整合两套 Pygame 量子游戏源码（桌面运行），用于教学演示与玩法验证。
+- **可扩展性**：为后续接入知识检索（RAG）、量子计算能力服务化、学习数据记录等模块预留结构位置。
 
 ## 项目结构
 
@@ -76,16 +79,20 @@ cd frontend
 - **game1：2-qubit 概率匹配版**：`games/game1/quantum_balatro/main.py`
 - **game2：Original / easyver 版（含 3→5 qubits、Fidelity 等概念实现）**：`games/game2/quantum_balatro_original/display_engine.py`
 
-前端 Game 页面会展示这两套游戏的目录/入口，并提供一键复制运行命令；数据来源为后端接口 `GET /api/games`。
+前端 Game 页面会展示这两套游戏的目录/入口，并提供一键复制运行命令（便于组内协作与演示复现）。
 
-## 接口占位（后续可直接往里塞实现）
+## 架构说明（概念）
 
-已在后端预留并出现在 `/docs` 中的接口（随版本迭代可能扩展）：
+- **平台层（Platform）**：统一承载站点、文档、后端服务入口与运行说明。
+- **游戏层（Games）**：游戏以子项目形式独立演进；现阶段为桌面 Demo，后续可按需要迁移到 Web（Phaser）或拆分核心逻辑为可复用服务。
+- **知识层（Docs / RAG）**：文档与知识素材归档于 `docs/`，后续 RAG 的 ingest / retriever / chain 等实现以模块化方式接入。
 
-- `GET /api/health`、`GET /api/v1/health-data`
-- `POST /api/rag/ingest`、`POST /api/rag/query`、`POST /api/rag/ask`
-- `POST /api/quantum/run`、`POST /api/quantum/fidelity`（当前为占位返回 501）
-- `GET /api/games`
+## Roadmap
+
+- [ ] 完善知识库构建流程（文档清洗、向量化、检索、引用输出）
+- [ ] 将量子后端能力抽象为可复用模块/服务（电路执行、Fidelity、噪声模型）
+- [ ] 打通“游戏卡关 → 智能解释/推荐学习路径”的闭环
+- [ ] 增加更多关卡/牌型/可视化与交互（Web 版本或更稳定的桌面版本）
 
 ## 端口约定
 
