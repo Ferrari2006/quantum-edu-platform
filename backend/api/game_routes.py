@@ -41,6 +41,8 @@ CIRCUIT_JOKERS = [
         "id": "TOPOLOGY",
         "name": "Shield",
         "desc": "Boss line limit +1",
+        "archetype": "Topology",
+        "synergy": "Pairs with Compiler to build a low-depth constraint breaker.",
         "cost": 4,
         "color": "cyan",
     },
@@ -48,6 +50,8 @@ CIRCUIT_JOKERS = [
         "id": "ENTANGLE",
         "name": "Spark",
         "desc": "+100 chips when CNOT is used",
+        "archetype": "Entanglement",
+        "synergy": "Stacks with Stabilizer and any CNOT-heavy route.",
         "cost": 5,
         "color": "red",
     },
@@ -55,6 +59,8 @@ CIRCUIT_JOKERS = [
         "id": "PHASE",
         "name": "Phase",
         "desc": "Z gates grant x1.5 multiplier",
+        "archetype": "Phase",
+        "synergy": "Best when the circuit keeps Z cards in the hand pool.",
         "cost": 6,
         "color": "gold",
     },
@@ -62,6 +68,8 @@ CIRCUIT_JOKERS = [
         "id": "PHASE_BYPASS",
         "name": "Phase Key",
         "desc": "Bypass Phase Lock boss requirement",
+        "archetype": "Phase",
+        "synergy": "Completes the Phase build by turning boss locks into free tempo.",
         "cost": 5,
         "color": "cyan",
     },
@@ -69,6 +77,8 @@ CIRCUIT_JOKERS = [
         "id": "ENTANGLE_STABILIZER",
         "name": "Stabilizer",
         "desc": "Entangler accepts any CNOT count",
+        "archetype": "Entanglement",
+        "synergy": "Lets Spark builds play flexible CNOT counts without losing to bosses.",
         "cost": 7,
         "color": "red",
     },
@@ -76,6 +86,8 @@ CIRCUIT_JOKERS = [
         "id": "COMPRESSION",
         "name": "Compiler",
         "desc": "Sparse Memory limit +1; circuits with 3 or fewer gates gain x1.8",
+        "archetype": "Compiler",
+        "synergy": "Rewards short circuits; Shield helps this build survive constraints.",
         "cost": 8,
         "color": "gold",
     },
@@ -83,6 +95,8 @@ CIRCUIT_JOKERS = [
         "id": "MEASURE",
         "name": "Projector",
         "desc": "+80 chips on single-state target puzzles",
+        "archetype": "Measurement",
+        "synergy": "A precision pick for pure-state targets and clean probability overlap.",
         "cost": 5,
         "color": "cyan",
     },
@@ -90,16 +104,55 @@ CIRCUIT_JOKERS = [
         "id": "BALANCER",
         "name": "Balancer",
         "desc": "+120 chips on four-state uniform target puzzles",
+        "archetype": "Measurement",
+        "synergy": "Pairs with H-heavy plans that spread probability evenly.",
         "cost": 6,
         "color": "red",
     },
 ]
+
+CARD_JOKER_ARCHETYPES = {
+    "Maxwell's Demon": {
+        "archetype": "Entanglement",
+        "synergy": "Plays best with Bell Pair and CNOT-heavy hands.",
+    },
+    "Schrodinger's Cat": {
+        "archetype": "Tempo",
+        "synergy": "A comeback Joker that saves close failed hands.",
+    },
+    "Phase Kickback": {
+        "archetype": "Phase",
+        "synergy": "Turns Z and CZ cards into a multiplier lane.",
+    },
+    "Rotation Compiler": {
+        "archetype": "Rotation",
+        "synergy": "Rewards RX, RY, and RZ rotation clusters.",
+    },
+    "Topology Bonus": {
+        "archetype": "Topology",
+        "synergy": "Supports CCX, SWAP, and routing-heavy advanced circuits.",
+    },
+}
+
+
+def serialize_card_joker(joker: Any) -> dict[str, Any]:
+    meta = CARD_JOKER_ARCHETYPES.get(
+        joker.name,
+        {"archetype": "Wildcard", "synergy": "Flexible pick for mixed quantum hands."},
+    )
+    return {
+        "name": joker.name,
+        "desc": joker.description,
+        "archetype": meta["archetype"],
+        "synergy": meta["synergy"],
+    }
 
 
 class GatePlacement(BaseModel):
     gate: str
     qubit: int
     slot: int
+    card_id: int | None = None
 
 
 class CircuitStageRequest(BaseModel):
@@ -121,6 +174,10 @@ class CircuitGameSession:
         self.stored_mult = 1.0
         self.last_chips = 0
         self.last_mult = 1.0
+        self.last_gate_sequence: list[tuple[str, int]] = []
+        self.last_probabilities: dict[str, float] = {}
+        self.last_target_probs: dict[str, float] = {}
+        self.last_recap_note = "Play a circuit to see how gates changed the measured probabilities."
         self.phase = "PLAYING"
         self.warning = ""
         self.last_roulette: dict[str, str] | None = None
@@ -128,8 +185,15 @@ class CircuitGameSession:
         self.shop_jokers: list[dict[str, Any]] = []
         self.owned_jokers: list[dict[str, Any]] = []
         self.gates: list[GatePlacement] = []
+        self.next_card_id = 1
+        self.deck: list[dict[str, Any]] = []
+        self.hand: list[dict[str, Any]] = []
+        self.discard_pile: list[dict[str, Any]] = []
+        self.staged_cards: dict[int, dict[str, Any]] = {}
         self.active_jokers: list[str] = []
         self.observe_count = 0
+        self.build_starting_deck()
+        self.draw_cards()
 
     def gate_sequence(self) -> list[tuple[str, int]]:
         ordered = sorted(self.gates, key=lambda item: (item.slot, item.qubit))
@@ -143,6 +207,7 @@ class CircuitGameSession:
         return {str(state): float(value) for state, value in probs.items()}
 
     def serialize(self) -> dict[str, Any]:
+        self.ensure_card_pool()
         level = self.level()
         probs = self.probabilities()
         chips, mult = calculate_score(
@@ -166,6 +231,20 @@ class CircuitGameSession:
             "observe_count": self.observe_count,
             "last_chips": self.last_chips,
             "last_mult": round(self.last_mult, 2),
+            "last_recap": {
+                "type": "probability",
+                "title": "Circuit recap",
+                "gates": [
+                    {"gate": gate, "qubit": qubit}
+                    for gate, qubit in self.last_gate_sequence
+                ],
+                "probabilities": self.last_probabilities,
+                "targets": self.last_target_probs,
+                "chips": self.last_chips,
+                "mult": round(self.last_mult, 2),
+                "score": int(self.last_chips * self.last_mult),
+                "note": self.last_recap_note,
+            },
             "warning": self.warning,
             "roulette_items": CIRCUIT_ROULETTE_ITEMS,
             "roulette_chances": self.last_roulette_chances or self.roulette_chances(),
@@ -174,6 +253,9 @@ class CircuitGameSession:
             "owned_jokers": self.owned_jokers,
             "active_jokers": self.active_jokers,
             "gates": [item.model_dump() for item in self.gates],
+            "hand_cards": self.hand,
+            "deck_count": len(self.deck),
+            "discard_count": len(self.discard_pile),
             "probabilities": probs,
             "preview": {
                 "chips": chips,
@@ -200,9 +282,60 @@ class CircuitGameSession:
             "-200 CHIPS": 10 + risk - (risk // 3) * 2,
         }
 
+    def build_starting_deck(self) -> None:
+        for gate in ["H", "H", "H", "X", "X", "Z", "CNOT", "CNOT"]:
+            self.deck.append(self.create_gate_card(gate))
+        random.shuffle(self.deck)
+
+    def ensure_card_pool(self) -> None:
+        if not hasattr(self, "next_card_id"):
+            self.next_card_id = 1
+        if not hasattr(self, "deck"):
+            self.deck = []
+        if not hasattr(self, "hand"):
+            self.hand = []
+        if not hasattr(self, "discard_pile"):
+            self.discard_pile = []
+        if not hasattr(self, "staged_cards"):
+            self.staged_cards = {}
+        if not self.deck and not self.hand and not self.discard_pile and not self.staged_cards:
+            self.build_starting_deck()
+            self.draw_cards()
+
+    def create_gate_card(self, gate: str) -> dict[str, Any]:
+        details = {
+            "H": ("Hadamard", "Superposition", "Split one line into 50/50 probability."),
+            "X": ("Pauli-X", "Bit Flip", "Flip |0> into |1> on one line."),
+            "Z": ("Pauli-Z", "Phase", "Phase tool for boss locks and joker combos."),
+            "CNOT": ("CNOT", "Entangle", "Control one line and flip the other."),
+        }
+        name, role, text = details[gate]
+        card = {
+            "id": self.next_card_id,
+            "gate": gate,
+            "name": name,
+            "role": role,
+            "text": text,
+        }
+        self.next_card_id += 1
+        return card
+
+    def draw_cards(self, target_size: int = 5) -> None:
+        while len(self.hand) < target_size:
+            if not self.deck:
+                if not self.discard_pile:
+                    break
+                self.deck = self.discard_pile
+                self.discard_pile = []
+                random.shuffle(self.deck)
+            self.hand.append(self.deck.pop())
+
     def set_gates(self, gates: list[GatePlacement]) -> None:
+        self.ensure_card_pool()
         valid_gates = {"H", "X", "Z", "CNOT"}
         seen_slots: set[tuple[int, int]] = set()
+        seen_cards: set[int] = set()
+        card_pool = {card["id"]: card for card in [*self.hand, *self.staged_cards.values()]}
         clean: list[GatePlacement] = []
         for item in gates:
             if item.gate not in valid_gates:
@@ -213,13 +346,37 @@ class CircuitGameSession:
             if key in seen_slots:
                 raise HTTPException(status_code=400, detail="Two gates cannot occupy one slot")
             seen_slots.add(key)
+            if item.card_id is None:
+                raise HTTPException(status_code=400, detail="A gate card is required")
+            if item.card_id in seen_cards:
+                raise HTTPException(status_code=400, detail="A gate card cannot be used twice")
+            card = card_pool.get(item.card_id)
+            if not card:
+                raise HTTPException(status_code=400, detail="Gate card is not in hand")
+            if card["gate"] != item.gate:
+                raise HTTPException(status_code=400, detail="Gate card does not match placement")
+            seen_cards.add(item.card_id)
             clean.append(item)
         self.gates = clean
+        self.staged_cards = {card_id: card_pool[card_id] for card_id in seen_cards}
+        self.hand = [card for card in card_pool.values() if card["id"] not in seen_cards]
         self.warning = ""
 
     def clear(self) -> None:
+        self.ensure_card_pool()
+        self.hand.extend(self.staged_cards.values())
+        self.hand.sort(key=lambda card: card["id"])
+        self.staged_cards = {}
         self.gates = []
         self.warning = ""
+
+    def discard_staged_and_clear(self) -> None:
+        self.ensure_card_pool()
+        self.discard_pile.extend(self.staged_cards.values())
+        self.staged_cards = {}
+        self.gates = []
+        self.warning = ""
+        self.draw_cards()
 
     def observe(self) -> None:
         valid, message = check_boss_constraints(
@@ -239,7 +396,7 @@ class CircuitGameSession:
         )
         self.stored_mult *= mult
         self.observe_count += 1
-        self.clear()
+        self.discard_staged_and_clear()
         chances = self.roulette_chances()
         self.last_roulette_chances = chances
         self.last_roulette = random.choices(
@@ -279,13 +436,21 @@ class CircuitGameSession:
             self.gate_sequence(),
             self.active_jokers,
         )
+        played_sequence = self.gate_sequence()
+        played_probs = self.probabilities()
         final_mult = mult * self.stored_mult
         self.score += int(chips * final_mult)
         self.last_chips = chips
         self.last_mult = final_mult
+        self.last_gate_sequence = played_sequence
+        self.last_probabilities = {str(state): float(value) for state, value in played_probs.items()}
+        self.last_target_probs = {
+            str(state): float(value) for state, value in self.level()["target_probs"].items()
+        }
+        self.last_recap_note = self.recap_note(played_sequence, self.last_probabilities, self.last_target_probs)
         self.hands_left -= 1
         self.stored_mult = 1.0
-        self.clear()
+        self.discard_staged_and_clear()
 
         if self.score >= self.level()["target"]:
             reward = self.level().get("reward", 4)
@@ -338,11 +503,41 @@ class CircuitGameSession:
         self.observe_count = 0
         self.last_chips = 0
         self.last_mult = 1.0
+        self.last_gate_sequence = []
+        self.last_probabilities = {}
+        self.last_target_probs = {}
+        self.last_recap_note = "Play a circuit to see how gates changed the measured probabilities."
+        self.deck = []
+        self.hand = []
+        self.discard_pile = []
+        self.staged_cards = {}
+        self.build_starting_deck()
+        self.draw_cards()
         self.phase = "PLAYING"
         self.last_roulette = None
         self.last_roulette_chances = None
         self.shop_jokers = []
         self.clear()
+
+    def recap_note(
+        self,
+        gate_sequence: list[tuple[str, int]],
+        probabilities: dict[str, float],
+        targets: dict[str, float],
+    ) -> str:
+        gate_names = [gate for gate, _ in gate_sequence]
+        overlap = sum(min(probabilities.get(state, 0.0), target) for state, target in targets.items())
+        if not gate_sequence:
+            return "No gates were staged, so the circuit stayed in |00>."
+        if overlap >= 0.95:
+            return "Excellent target overlap: the measured distribution closely matched the blind."
+        if "H" not in gate_names and len(targets) > 1:
+            return "The target has multiple likely states. Try H to create superposition before scoring."
+        if "CNOT" not in gate_names and any(state in targets for state in ("11", "10", "01")):
+            return "The target suggests correlated states. Try CNOT after preparing a control qubit."
+        if "Z" in gate_names:
+            return "Z changes phase rather than direct measurement probability, so it matters most with phase rules or phase jokers."
+        return "Compare the blue probabilities against the yellow targets, then adjust gates to increase overlap."
 
 
 @router.get("/list")
@@ -412,6 +607,16 @@ def get_game_state() -> dict[str, Any]:
         "last_hand_played": getattr(game, "last_hand_played", "None"),
         "last_fidelity": getattr(game, "last_fidelity", 0.0),
         "last_payout": getattr(game, "last_payout", {"base": 0, "plays": 0, "total": 0}),
+        "last_recap": {
+            "type": "fidelity",
+            "title": getattr(game, "last_hand_played", "None"),
+            "gates": getattr(game, "last_played_gate_types", []),
+            "fidelity": getattr(game, "last_fidelity", 0.0),
+            "note": getattr(game, "current_lesson", {}).get(
+                "body",
+                "Play a staged hand to compare your circuit with the target state.",
+            ),
+        },
         "last_score_breakdown": getattr(
             game,
             "last_score_breakdown",
@@ -437,12 +642,11 @@ def get_game_state() -> dict[str, Any]:
             }
             for index, card in enumerate(game.hand)
         ],
-        "jokers": [{"name": joker.name, "desc": joker.description} for joker in game.jokers],
+        "jokers": [serialize_card_joker(joker) for joker in game.jokers],
         "shop_jokers": [
             {
+                **serialize_card_joker(item["item"]),
                 "index": index,
-                "name": item["item"].name,
-                "desc": item["item"].description,
                 "cost": item["cost"],
             }
             for index, item in enumerate(getattr(game, "shop_jokers", []))
