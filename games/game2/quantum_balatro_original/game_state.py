@@ -3,6 +3,73 @@ import random
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector
 
+CARD_BLIND_EVENTS = [
+    {
+        "id": "CALIBRATION_DRIFT",
+        "name": "Calibration Drift",
+        "desc": "The first played H this blind grants +2 multiplier.",
+    },
+    {
+        "id": "NOISY_HARDWARE",
+        "name": "Noisy Hardware",
+        "desc": "Hands with more than 3 cards lose 18% fidelity.",
+    },
+    {
+        "id": "CHEAP_MEASUREMENT",
+        "name": "Cheap Measurement",
+        "desc": "The first measured hand gains +0.10 fidelity.",
+    },
+    {
+        "id": "PHASE_EXPERIMENT",
+        "name": "Phase Experiment",
+        "desc": "Z/CZ/RZ cards grant +35 chips each.",
+    },
+    {
+        "id": "ENTANGLEMENT_TAX",
+        "name": "Entanglement Tax",
+        "desc": "CNOT grants +90 chips, then consumes $2 chips.",
+    },
+]
+
+CARD_BONUS_OBJECTIVES = [
+    {
+        "id": "LOW_GATE_CLEAR",
+        "name": "Minimal Circuit",
+        "desc": "Clear this blind with no more than 3 played cards.",
+        "reward": 3,
+    },
+    {
+        "id": "HIGH_FIDELITY",
+        "name": "Clean State",
+        "desc": "Reach at least 90% fidelity in a scoring hand.",
+        "reward": 3,
+    },
+    {
+        "id": "NO_CNOT_CLEAR",
+        "name": "No Entangler",
+        "desc": "Clear this blind without CNOT in the scoring hand.",
+        "reward": 3,
+    },
+    {
+        "id": "Z_SCORE",
+        "name": "Phase Marker",
+        "desc": "Use Z, CZ, or RZ in a scoring hand.",
+        "reward": 2,
+    },
+    {
+        "id": "BELL_PAIR",
+        "name": "Bell Trigger",
+        "desc": "Trigger a Bell Pair hand.",
+        "reward": 3,
+    },
+    {
+        "id": "TWO_HAND_CLIMB",
+        "name": "Momentum",
+        "desc": "Score higher than the previous hand twice in a row.",
+        "reward": 3,
+    },
+]
+
 # ==========================================
 # 1. 实体定义：卡牌系统 (Cards)
 # ==========================================
@@ -122,7 +189,8 @@ class GameState:
             'fidelity': 0.0,
             'joker_chips_delta': 0,
             'joker_mult_delta': 0,
-            'score': 0
+            'score': 0,
+            'event_note': ''
         }
         
         # --- 当前游玩状态 ---
@@ -137,6 +205,14 @@ class GameState:
         self.preview_score = 0
         self.preview_fidelity = 0.0
         self.last_played_gate_types = []
+        self.blind_event = random.choice(CARD_BLIND_EVENTS)
+        self.event_used = False
+        self.last_event_result = ""
+        self.bonus_objective = random.choice(CARD_BONUS_OBJECTIVES)
+        self.bonus_complete = False
+        self.bonus_reward_claimed = False
+        self.last_hand_score_value = 0
+        self.score_climb_streak = 0
         
         # --- 量子牌型定义 (Base Chips x Base Mult) ---
         self.poker_hands = {
@@ -197,6 +273,14 @@ class GameState:
         self.blind_index = 0
         self.num_qubits = 3
         self.last_fidelity = 0.0
+        self.blind_event = random.choice(CARD_BLIND_EVENTS)
+        self.event_used = False
+        self.last_event_result = ""
+        self.bonus_objective = random.choice(CARD_BONUS_OBJECTIVES)
+        self.bonus_complete = False
+        self.bonus_reward_claimed = False
+        self.last_hand_score_value = 0
+        self.score_climb_streak = 0
         if self.backend: self.backend.upgrade_qubits(3)
         self.start_new_blind()
 
@@ -209,6 +293,91 @@ class GameState:
                 random.shuffle(self.deck)
             self.hand.append(self.deck.pop())
 
+    def ensure_blind_event(self):
+        if not hasattr(self, "blind_event") or not self.blind_event:
+            self.blind_event = random.choice(CARD_BLIND_EVENTS)
+        if not hasattr(self, "event_used"):
+            self.event_used = False
+        if not hasattr(self, "last_event_result"):
+            self.last_event_result = ""
+
+    def ensure_bonus_objective(self):
+        if not hasattr(self, "bonus_objective") or not self.bonus_objective:
+            self.bonus_objective = random.choice(CARD_BONUS_OBJECTIVES)
+        if not hasattr(self, "bonus_complete"):
+            self.bonus_complete = False
+        if not hasattr(self, "bonus_reward_claimed"):
+            self.bonus_reward_claimed = False
+        if not hasattr(self, "last_hand_score_value"):
+            self.last_hand_score_value = 0
+        if not hasattr(self, "score_climb_streak"):
+            self.score_climb_streak = 0
+
+    def update_bonus_objective(self, gate_types, hand_name, fidelity, hand_score, cleared):
+        self.ensure_bonus_objective()
+        objective_id = self.bonus_objective["id"]
+        if self.last_hand_score_value and hand_score > self.last_hand_score_value:
+            self.score_climb_streak += 1
+        elif self.last_hand_score_value:
+            self.score_climb_streak = 0
+        self.last_hand_score_value = hand_score
+
+        if objective_id == "LOW_GATE_CLEAR" and cleared and len(gate_types) <= 3:
+            self.bonus_complete = True
+        elif objective_id == "HIGH_FIDELITY" and fidelity >= 0.9:
+            self.bonus_complete = True
+        elif objective_id == "NO_CNOT_CLEAR" and cleared and "CNOT" not in gate_types:
+            self.bonus_complete = True
+        elif objective_id == "Z_SCORE" and hand_score > 0 and any(gate in ["Z", "CZ", "RZ"] for gate in gate_types):
+            self.bonus_complete = True
+        elif objective_id == "BELL_PAIR" and hand_name.startswith("Bell Pair"):
+            self.bonus_complete = True
+        elif objective_id == "TWO_HAND_CLIMB" and self.score_climb_streak >= 2:
+            self.bonus_complete = True
+
+    def claim_bonus_reward(self):
+        self.ensure_bonus_objective()
+        if not self.bonus_complete or self.bonus_reward_claimed:
+            return 0
+        reward = int(self.bonus_objective.get("reward", 0))
+        self.chips += reward
+        self.bonus_reward_claimed = True
+        return reward
+
+    def apply_blind_event(self, gate_types, chips, mult, fidelity, commit=False):
+        self.ensure_blind_event()
+        event_id = self.blind_event["id"]
+        note = ""
+        chip_cost = 0
+
+        if event_id == "CALIBRATION_DRIFT" and "H" in gate_types and not self.event_used:
+            mult += 2
+            note = "+2 mult from first H"
+            if commit:
+                self.event_used = True
+        elif event_id == "NOISY_HARDWARE" and len(gate_types) > 3:
+            fidelity = max(0.0, fidelity * 0.82)
+            note = "-18% fidelity after 3 cards"
+        elif event_id == "CHEAP_MEASUREMENT" and not self.event_used:
+            fidelity = min(1.0, fidelity + 0.10)
+            note = "+0.10 fidelity from cheap measurement"
+            if commit:
+                self.event_used = True
+        elif event_id == "PHASE_EXPERIMENT":
+            phase_count = sum(1 for gate in gate_types if gate in ["Z", "CZ", "RZ"])
+            if phase_count:
+                chips += 35 * phase_count
+                note = f"+{35 * phase_count} chips from phase cards"
+        elif event_id == "ENTANGLEMENT_TAX" and "CNOT" in gate_types:
+            cnot_count = gate_types.count("CNOT")
+            chips += 90 * cnot_count
+            chip_cost = 2
+            note = f"+{90 * cnot_count} chips from CNOT, -$2 chips"
+
+        if commit and chip_cost:
+            self.chips = max(0, self.chips - chip_cost)
+        return chips, mult, fidelity, note
+
     def start_new_blind(self):
         if self.ante >= 3 and self.num_qubits == 3:
             self.num_qubits = 5
@@ -220,6 +389,14 @@ class GameState:
         self.last_hand_played = "None"
         self.last_fidelity = 0.0
         self.last_played_gate_types = []
+        self.blind_event = random.choice(CARD_BLIND_EVENTS)
+        self.event_used = False
+        self.last_event_result = ""
+        self.bonus_objective = random.choice(CARD_BONUS_OBJECTIVES)
+        self.bonus_complete = False
+        self.bonus_reward_claimed = False
+        self.last_hand_score_value = 0
+        self.score_climb_streak = 0
         self.last_score_breakdown = {
             'hand': 'None',
             'base_chips': 0,
@@ -227,7 +404,8 @@ class GameState:
             'fidelity': 0.0,
             'joker_chips_delta': 0,
             'joker_mult_delta': 0,
-            'score': 0
+            'score': 0,
+            'event_note': ''
         }
         
         base = 300
@@ -274,6 +452,7 @@ class GameState:
             fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
             if abs(1.0 - fidelity) < 1e-9:
                 fidelity = 1.0
+        base_chips, base_mult, fidelity, _ = self.apply_blind_event(gate_types, base_chips, base_mult, fidelity)
         self.preview_fidelity = fidelity
         self.preview_score = int((base_chips * base_mult) * fidelity)
 
@@ -430,8 +609,16 @@ class GameState:
                 if abs(1.0 - fidelity) < 1e-9:
                     fidelity = 1.0
 
+            base_chips, base_mult, fidelity, event_note = self.apply_blind_event(
+                played_gate_types,
+                base_chips,
+                base_mult,
+                fidelity,
+                commit=True,
+            )
             self.last_fidelity = fidelity
             hand_score = int((base_chips * base_mult) * fidelity)
+            self.last_event_result = event_note
             self.last_score_breakdown = {
                 'hand': hand_name,
                 'base_chips': original_chips,
@@ -440,8 +627,11 @@ class GameState:
                 'joker_chips_delta': base_chips - original_chips,
                 'joker_mult_delta': base_mult - original_mult,
                 'score': hand_score,
+                'event_note': event_note,
             }
             self.current_score += hand_score
+            cleared = self.current_score >= self.target_score
+            self.update_bonus_objective(played_gate_types, hand_name, fidelity, hand_score, cleared)
 
             # 补牌与进度检查
             self.draw_cards(len(unique_indices))
@@ -472,6 +662,9 @@ class GameState:
             
             self.last_payout = {'base': base_reward, 'plays': plays_reward, 'total': total_reward}
             self.chips += total_reward
+            bonus_reward = self.claim_bonus_reward()
+            if bonus_reward:
+                self.last_payout['bonus'] = bonus_reward
             
             self.discard_pile.extend(self.hand)
             self.hand.clear()

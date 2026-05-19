@@ -36,6 +36,61 @@ CIRCUIT_ROULETTE_ITEMS = [
     {"name": "-200 CHIPS", "color": "gold", "message": "Energy Leak"},
 ]
 
+CIRCUIT_BLIND_EVENTS = [
+    {
+        "id": "CALIBRATION_DRIFT",
+        "name": "Calibration Drift",
+        "desc": "The first played H this blind grants +1.5 multiplier.",
+    },
+    {
+        "id": "NOISY_HARDWARE",
+        "name": "Noisy Hardware",
+        "desc": "Circuits with more than 3 gates lose 15% chips.",
+    },
+    {
+        "id": "CHEAP_MEASUREMENT",
+        "name": "Cheap Measurement",
+        "desc": "Observe roulette risk is reduced this blind.",
+    },
+    {
+        "id": "PHASE_EXPERIMENT",
+        "name": "Phase Experiment",
+        "desc": "Z gates grant +70 chips this blind.",
+    },
+    {
+        "id": "ENTANGLEMENT_TAX",
+        "name": "Entanglement Tax",
+        "desc": "CNOT grants +160 chips, then consumes 80 score.",
+    },
+]
+
+CIRCUIT_BONUS_OBJECTIVES = [
+    {
+        "id": "LOW_GATE_CLEAR",
+        "name": "Compact Proof",
+        "desc": "Clear this blind with no more than 3 gates in the scoring hand.",
+        "reward": 3,
+    },
+    {
+        "id": "NO_CNOT_CLEAR",
+        "name": "Classical Route",
+        "desc": "Clear this blind without using CNOT in the scoring hand.",
+        "reward": 3,
+    },
+    {
+        "id": "Z_SCORE",
+        "name": "Phase Marker",
+        "desc": "Use Z in a scoring hand.",
+        "reward": 2,
+    },
+    {
+        "id": "TWO_HAND_CLIMB",
+        "name": "Momentum",
+        "desc": "Score higher than the previous hand twice in a row.",
+        "reward": 3,
+    },
+]
+
 CIRCUIT_JOKERS = [
     {
         "id": "TOPOLOGY",
@@ -178,6 +233,14 @@ class CircuitGameSession:
         self.last_probabilities: dict[str, float] = {}
         self.last_target_probs: dict[str, float] = {}
         self.last_recap_note = "Play a circuit to see how gates changed the measured probabilities."
+        self.blind_event = random.choice(CIRCUIT_BLIND_EVENTS)
+        self.event_used = False
+        self.last_event_result = ""
+        self.bonus_objective = random.choice(CIRCUIT_BONUS_OBJECTIVES)
+        self.bonus_complete = False
+        self.bonus_reward_claimed = False
+        self.last_hand_score = 0
+        self.score_climb_streak = 0
         self.phase = "PLAYING"
         self.warning = ""
         self.last_roulette: dict[str, str] | None = None
@@ -208,6 +271,8 @@ class CircuitGameSession:
 
     def serialize(self) -> dict[str, Any]:
         self.ensure_card_pool()
+        self.ensure_blind_event()
+        self.ensure_bonus_objective()
         level = self.level()
         probs = self.probabilities()
         chips, mult = calculate_score(
@@ -216,6 +281,7 @@ class CircuitGameSession:
             self.gate_sequence(),
             self.active_jokers,
         )
+        preview_chips, preview_mult, preview_note = self.apply_event_preview(chips, mult)
         return {
             "active": True,
             "kind": "circuit",
@@ -249,6 +315,16 @@ class CircuitGameSession:
             "roulette_items": CIRCUIT_ROULETTE_ITEMS,
             "roulette_chances": self.last_roulette_chances or self.roulette_chances(),
             "last_roulette": self.last_roulette,
+            "blind_event": {
+                **self.blind_event,
+                "used": self.event_used,
+                "last_result": self.last_event_result,
+            },
+            "bonus_objective": {
+                **self.bonus_objective,
+                "complete": self.bonus_complete,
+                "claimed": self.bonus_reward_claimed,
+            },
             "shop_jokers": self.shop_jokers,
             "owned_jokers": self.owned_jokers,
             "active_jokers": self.active_jokers,
@@ -258,12 +334,13 @@ class CircuitGameSession:
             "discard_count": len(self.discard_pile),
             "probabilities": probs,
             "preview": {
-                "chips": chips,
-                "mult": mult,
-                "total": int(chips * mult * self.stored_mult),
-                "match_chips": chips,
-                "gate_mult": mult,
+                "chips": preview_chips,
+                "mult": round(preview_mult, 2),
+                "total": int(preview_chips * preview_mult * self.stored_mult),
+                "match_chips": preview_chips,
+                "gate_mult": round(preview_mult, 2),
                 "stored_mult": round(self.stored_mult, 2),
+                "event_note": preview_note,
             },
             "lesson": {
                 "title": "Target probability puzzle",
@@ -272,8 +349,64 @@ class CircuitGameSession:
             },
         }
 
+    def ensure_blind_event(self) -> None:
+        if not hasattr(self, "blind_event") or not self.blind_event:
+            self.blind_event = random.choice(CIRCUIT_BLIND_EVENTS)
+        if not hasattr(self, "event_used"):
+            self.event_used = False
+        if not hasattr(self, "last_event_result"):
+            self.last_event_result = ""
+
+    def ensure_bonus_objective(self) -> None:
+        if not hasattr(self, "bonus_objective") or not self.bonus_objective:
+            self.bonus_objective = random.choice(CIRCUIT_BONUS_OBJECTIVES)
+        if not hasattr(self, "bonus_complete"):
+            self.bonus_complete = False
+        if not hasattr(self, "bonus_reward_claimed"):
+            self.bonus_reward_claimed = False
+        if not hasattr(self, "last_hand_score"):
+            self.last_hand_score = 0
+        if not hasattr(self, "score_climb_streak"):
+            self.score_climb_streak = 0
+
+    def update_bonus_objective(
+        self,
+        gate_sequence: list[tuple[str, int]],
+        hand_score: int,
+        cleared: bool,
+    ) -> None:
+        self.ensure_bonus_objective()
+        gate_names = [gate for gate, _ in gate_sequence]
+        objective_id = self.bonus_objective["id"]
+        if self.last_hand_score and hand_score > self.last_hand_score:
+            self.score_climb_streak += 1
+        elif self.last_hand_score:
+            self.score_climb_streak = 0
+        self.last_hand_score = hand_score
+
+        if objective_id == "LOW_GATE_CLEAR" and cleared and len(gate_names) <= 3:
+            self.bonus_complete = True
+        elif objective_id == "NO_CNOT_CLEAR" and cleared and "CNOT" not in gate_names:
+            self.bonus_complete = True
+        elif objective_id == "Z_SCORE" and hand_score > 0 and "Z" in gate_names:
+            self.bonus_complete = True
+        elif objective_id == "TWO_HAND_CLIMB" and self.score_climb_streak >= 2:
+            self.bonus_complete = True
+
+    def claim_bonus_reward(self) -> int:
+        self.ensure_bonus_objective()
+        if not self.bonus_complete or self.bonus_reward_claimed:
+            return 0
+        reward = int(self.bonus_objective.get("reward", 0))
+        self.money += reward
+        self.bonus_reward_claimed = True
+        return reward
+
     def roulette_chances(self) -> dict[str, int]:
+        self.ensure_blind_event()
         risk = min(45, int(max(0, self.stored_mult - 1) * 5) + self.observe_count * 10)
+        if self.blind_event["id"] == "CHEAP_MEASUREMENT":
+            risk = max(0, risk - 18)
         safe = max(25, 70 - risk)
         return {
             "SAFE": safe,
@@ -281,6 +414,30 @@ class CircuitGameSession:
             "RESET MULT": 10 + risk // 3,
             "-200 CHIPS": 10 + risk - (risk // 3) * 2,
         }
+
+    def apply_event_preview(self, chips: int, mult: float) -> tuple[int, float, str]:
+        event_id = self.blind_event["id"]
+        if self.event_used and event_id == "CALIBRATION_DRIFT":
+            return chips, mult, ""
+        gate_names = [gate for gate, _ in self.gate_sequence()]
+        if event_id == "CALIBRATION_DRIFT" and "H" in gate_names:
+            return chips, mult + 1.5, "+1.5 mult from first H"
+        if event_id == "NOISY_HARDWARE" and len(gate_names) > 3:
+            return int(chips * 0.85), mult, "-15% chips after 3 gates"
+        if event_id == "PHASE_EXPERIMENT" and "Z" in gate_names:
+            return chips + 70 * gate_names.count("Z"), mult, "+70 chips per Z"
+        if event_id == "ENTANGLEMENT_TAX" and "CNOT" in gate_names:
+            return chips + 160 * gate_names.count("CNOT"), mult, "+160 chips per CNOT, -80 score on play"
+        return chips, mult, ""
+
+    def apply_event_score(self, chips: int, mult: float) -> tuple[int, float, int, str]:
+        chips, mult, note = self.apply_event_preview(chips, mult)
+        score_cost = 0
+        if self.blind_event["id"] == "ENTANGLEMENT_TAX" and "CNOT" in [gate for gate, _ in self.gate_sequence()]:
+            score_cost = 80
+        if self.blind_event["id"] == "CALIBRATION_DRIFT" and note:
+            self.event_used = True
+        return chips, mult, score_cost, note
 
     def build_starting_deck(self) -> None:
         for gate in ["H", "H", "H", "X", "X", "Z", "CNOT", "CNOT"]:
@@ -394,6 +551,8 @@ class CircuitGameSession:
             self.gate_sequence(),
             self.active_jokers,
         )
+        _, mult, _, event_note = self.apply_event_score(0, mult)
+        self.last_event_result = event_note
         self.stored_mult *= mult
         self.observe_count += 1
         self.discard_staged_and_clear()
@@ -436,12 +595,16 @@ class CircuitGameSession:
             self.gate_sequence(),
             self.active_jokers,
         )
+        chips, mult, score_cost, event_note = self.apply_event_score(chips, mult)
         played_sequence = self.gate_sequence()
         played_probs = self.probabilities()
         final_mult = mult * self.stored_mult
-        self.score += int(chips * final_mult)
+        hand_score = int(chips * final_mult)
+        self.score = max(0, self.score - score_cost)
+        self.score += hand_score
         self.last_chips = chips
         self.last_mult = final_mult
+        self.last_event_result = event_note or (f"-{score_cost} score from Entanglement Tax" if score_cost else "")
         self.last_gate_sequence = played_sequence
         self.last_probabilities = {str(state): float(value) for state, value in played_probs.items()}
         self.last_target_probs = {
@@ -450,11 +613,14 @@ class CircuitGameSession:
         self.last_recap_note = self.recap_note(played_sequence, self.last_probabilities, self.last_target_probs)
         self.hands_left -= 1
         self.stored_mult = 1.0
+        cleared = self.score >= self.level()["target"]
+        self.update_bonus_objective(played_sequence, hand_score, cleared)
         self.discard_staged_and_clear()
 
-        if self.score >= self.level()["target"]:
+        if cleared:
             reward = self.level().get("reward", 4)
             self.money += reward + max(self.hands_left, 0)
+            self.claim_bonus_reward()
             if self.level_idx == len(LEVELS) - 1:
                 self.phase = "WIN"
             else:
@@ -507,6 +673,14 @@ class CircuitGameSession:
         self.last_probabilities = {}
         self.last_target_probs = {}
         self.last_recap_note = "Play a circuit to see how gates changed the measured probabilities."
+        self.blind_event = random.choice(CIRCUIT_BLIND_EVENTS)
+        self.event_used = False
+        self.last_event_result = ""
+        self.bonus_objective = random.choice(CIRCUIT_BONUS_OBJECTIVES)
+        self.bonus_complete = False
+        self.bonus_reward_claimed = False
+        self.last_hand_score = 0
+        self.score_climb_streak = 0
         self.deck = []
         self.hand = []
         self.discard_pile = []
@@ -590,6 +764,10 @@ def get_game_state() -> dict[str, Any]:
         return active.serialize()
 
     game = active["instance"]
+    if hasattr(game, "ensure_blind_event"):
+        game.ensure_blind_event()
+    if hasattr(game, "ensure_bonus_objective"):
+        game.ensure_bonus_objective()
     return {
         "active": True,
         "kind": "cards",
@@ -607,6 +785,16 @@ def get_game_state() -> dict[str, Any]:
         "last_hand_played": getattr(game, "last_hand_played", "None"),
         "last_fidelity": getattr(game, "last_fidelity", 0.0),
         "last_payout": getattr(game, "last_payout", {"base": 0, "plays": 0, "total": 0}),
+        "blind_event": {
+            **getattr(game, "blind_event", {}),
+            "used": getattr(game, "event_used", False),
+            "last_result": getattr(game, "last_event_result", ""),
+        },
+        "bonus_objective": {
+            **getattr(game, "bonus_objective", {}),
+            "complete": getattr(game, "bonus_complete", False),
+            "claimed": getattr(game, "bonus_reward_claimed", False),
+        },
         "last_recap": {
             "type": "fidelity",
             "title": getattr(game, "last_hand_played", "None"),
@@ -628,6 +816,7 @@ def get_game_state() -> dict[str, Any]:
                 "joker_chips_delta": 0,
                 "joker_mult_delta": 0,
                 "score": 0,
+                "event_note": "",
             },
         ),
         "hand_cards": [

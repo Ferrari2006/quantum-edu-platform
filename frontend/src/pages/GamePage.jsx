@@ -57,8 +57,8 @@ const CIRCUIT_TUTORIAL_STEPS = [
   },
   {
     key: "circuit-score",
-    title: "准备好就 Play Hand",
-    body: "Play Hand 会结算当前线路、消耗一次出手机会，并在达标后进入商店。Boss 关还会限制线路规则。",
+    title: "准备好就结算本手",
+    body: "结算本手会结算当前线路、消耗一次出手机会，并在达标后进入商店。Boss 关还会限制线路规则。",
     cue: "开始破解",
   },
 ];
@@ -90,35 +90,35 @@ const CARD_TUTORIAL_STEPS = [
   {
     key: "score",
     title: "出牌并观察结算",
-    body: "右侧会显示最近一次牌型、分数拆解和教学提示。准备好后按 Play Hand；不想要的牌可以选中后 Discard。",
+    body: "右侧会显示最近一次牌型、分数拆解和教学提示。准备好后按结算本手；不想要的牌可以选中后弃掉。",
     cue: "开始游戏",
   },
 ];
 
 const CONCEPT_LIBRARY = [
-  { id: "gate-h", group: "Gates", title: "H gate", desc: "Creates superposition: one basis state can split into multiple measurement outcomes." },
-  { id: "gate-x", group: "Gates", title: "X gate", desc: "A bit flip. It maps |0> to |1> and |1> to |0>." },
-  { id: "gate-z", group: "Gates", title: "Z gate", desc: "A phase flip. It may not change measurement probability immediately, but it changes interference." },
-  { id: "gate-cnot", group: "Gates", title: "CNOT gate", desc: "A controlled operation. On superposition, it can create entanglement." },
-  { id: "gate-cz", group: "Gates", title: "CZ gate", desc: "A controlled phase gate. It links qubits through phase rather than a visible bit flip." },
-  { id: "gate-swap", group: "Gates", title: "SWAP gate", desc: "Exchanges the states of two qubits, making routing part of the puzzle." },
-  { id: "gate-rx", group: "Gates", title: "RX gate", desc: "A continuous rotation around the X axis of the Bloch sphere." },
-  { id: "gate-ry", group: "Gates", title: "RY gate", desc: "A continuous rotation around the Y axis of the Bloch sphere." },
-  { id: "gate-rz", group: "Gates", title: "RZ gate", desc: "A continuous rotation around the Z axis, changing relative phase." },
-  { id: "gate-ccx", group: "Gates", title: "CCX gate", desc: "The Toffoli gate: two controls decide whether a target qubit flips." },
-  { id: "formula-probability", group: "Formulas", title: "Measurement probability", desc: "P(s) = |amplitude(s)|^2. Game1 scores by matching measured probabilities." },
-  { id: "formula-fidelity", group: "Formulas", title: "State fidelity", desc: "F = |<target|current>|^2. Game2 scores how close your circuit state is to a target state." },
-  { id: "formula-score", group: "Formulas", title: "Score formula", desc: "Score combines base chips, multipliers, and either probability overlap or fidelity." },
-  { id: "state-bell", group: "States", title: "Bell pair", desc: "A two-qubit entangled state with strong correlation between measurement outcomes." },
-  { id: "state-ghz", group: "States", title: "GHZ state", desc: "A multi-qubit entangled state where all qubits share one global correlation." },
-  { id: "state-w", group: "States", title: "W state", desc: "A multi-qubit state with one excitation shared across several qubits." },
-  { id: "state-phase", group: "States", title: "Phase lock", desc: "A situation where probabilities may look close, but relative phase controls fidelity." },
-  { id: "state-rotation", group: "States", title: "Rotation trio", desc: "A hand that introduces continuous rotations instead of only discrete flips." },
-  { id: "system-measurement", group: "Systems", title: "Measurement collapse", desc: "Observation extracts information, then the prepared circuit no longer stays untouched." },
-  { id: "system-overlap", group: "Systems", title: "Target overlap", desc: "A circuit can be evaluated by how much of its output distribution overlaps the target." },
-  { id: "system-boss", group: "Systems", title: "Hardware constraints", desc: "Boss rules represent limits like depth, routing, phase requirements, and gate count." },
-  { id: "system-clear", group: "Systems", title: "Blind cleared", desc: "Clearing a blind means your quantum strategy met the scoring target." },
-  { id: "system-failure", group: "Systems", title: "Run failed", desc: "Failure is a useful diagnostic: compare gates, targets, and the recap to plan the next circuit." },
+  { id: "gate-h", group: "Gates", title: "H 门", desc: "制造叠加态：一个基态可以分裂成多个测量结果。" },
+  { id: "gate-x", group: "Gates", title: "X 门", desc: "比特翻转门，把 |0> 变成 |1>，也把 |1> 变成 |0>。" },
+  { id: "gate-z", group: "Gates", title: "Z 门", desc: "相位翻转门。它不一定立刻改变测量概率，但会改变干涉。" },
+  { id: "gate-cnot", group: "Gates", title: "CNOT 门", desc: "受控操作。在叠加态上使用时，可能产生纠缠。" },
+  { id: "gate-cz", group: "Gates", title: "CZ 门", desc: "受控相位门，用相位把两个量子比特联系起来。" },
+  { id: "gate-swap", group: "Gates", title: "SWAP 门", desc: "交换两个量子比特的状态，让线路路由也成为解题的一部分。" },
+  { id: "gate-rx", group: "Gates", title: "RX 门", desc: "绕 Bloch 球 X 轴的连续旋转。" },
+  { id: "gate-ry", group: "Gates", title: "RY 门", desc: "绕 Bloch 球 Y 轴的连续旋转。" },
+  { id: "gate-rz", group: "Gates", title: "RZ 门", desc: "绕 Bloch 球 Z 轴旋转，改变相对相位。" },
+  { id: "gate-ccx", group: "Gates", title: "CCX 门", desc: "Toffoli 门：两个控制位共同决定目标位是否翻转。" },
+  { id: "formula-probability", group: "Formulas", title: "测量概率", desc: "P(s) = |amplitude(s)|^2。Game1 通过匹配测量概率得分。" },
+  { id: "formula-fidelity", group: "Formulas", title: "态保真度", desc: "F = |<target|current>|^2。Game2 用它衡量当前量子态和目标态的接近程度。" },
+  { id: "formula-score", group: "Formulas", title: "得分公式", desc: "得分由基础筹码、倍率，以及概率重合或保真度共同决定。" },
+  { id: "state-bell", group: "States", title: "Bell 对", desc: "一种双量子比特纠缠态，测量结果之间有很强相关性。" },
+  { id: "state-ghz", group: "States", title: "GHZ 态", desc: "多量子比特纠缠态，所有量子比特共享一个整体相关性。" },
+  { id: "state-w", group: "States", title: "W 态", desc: "一种多量子比特态，单个激发分布在多个量子比特上。" },
+  { id: "state-phase", group: "States", title: "相位锁", desc: "概率看起来可能接近，但相对相位会影响保真度。" },
+  { id: "state-rotation", group: "States", title: "旋转组", desc: "使用连续旋转门，而不是只做离散翻转的牌型。" },
+  { id: "system-measurement", group: "Systems", title: "测量坍缩", desc: "观察会提取信息，也会让准备好的线路不再保持原样。" },
+  { id: "system-overlap", group: "Systems", title: "目标重合", desc: "可以用输出分布和目标分布的重合程度来评价线路。" },
+  { id: "system-boss", group: "Systems", title: "硬件约束", desc: "Boss 规则代表深度、路由、相位要求、门数量等限制。" },
+  { id: "system-clear", group: "Systems", title: "关卡完成", desc: "完成关卡表示你的量子策略达到了目标分。" },
+  { id: "system-failure", group: "Systems", title: "运行失败", desc: "失败也是诊断信息：比较门序列、目标和回顾面板，再规划下一条线路。" },
 ];
 
 const CONCEPT_BY_ID = Object.fromEntries(CONCEPT_LIBRARY.map((concept) => [concept.id, concept]));
@@ -189,54 +189,151 @@ function handConceptIds(handName = "") {
 
 const BUILD_ARCHETYPES = {
   Entanglement: {
-    label: "Entanglement",
-    hint: "CNOT and Bell-style hands turn correlation into bonus chips.",
+    label: "纠缠流",
+    hint: "用 CNOT 和 Bell 类牌型把相关性转化成额外筹码。",
     gates: ["CNOT", "CX"],
-    wants: ["CNOT", "Bell Pair", "Stabilizer"],
+    wants: ["CNOT", "Bell 牌型", "稳定器"],
   },
   Phase: {
-    label: "Phase",
-    hint: "Z/CZ effects convert invisible phase into multiplier value.",
+    label: "相位流",
+    hint: "Z/CZ/RZ 把看不见的相位变化转成倍率收益。",
     gates: ["Z", "CZ", "RZ"],
-    wants: ["Z", "CZ", "Phase Key"],
+    wants: ["Z", "CZ", "相位钥匙"],
   },
   Compiler: {
-    label: "Compiler",
-    hint: "Short circuits and lean gate paths score harder.",
+    label: "压缩流",
+    hint: "更短、更干净的线路会获得更高收益。",
     gates: [],
-    wants: ["Shield", "low gate count", "clean target overlap"],
+    wants: ["护盾", "低门数", "高目标重合"],
   },
   Topology: {
-    label: "Topology",
-    hint: "Routing and constraint tools make awkward boss rules playable.",
+    label: "拓扑流",
+    hint: "用换线和约束工具处理更刁钻的 Boss 规则。",
     gates: ["SWAP", "CCX"],
-    wants: ["SWAP", "CCX", "Shield"],
+    wants: ["SWAP", "CCX", "护盾"],
   },
   Measurement: {
-    label: "Measurement",
-    hint: "Pure-state or uniform targets become reliable chip engines.",
+    label: "测量流",
+    hint: "纯态或均匀分布目标会变成稳定的筹码来源。",
     gates: ["H"],
-    wants: ["H", "pure targets", "uniform targets"],
+    wants: ["H", "纯态目标", "均匀目标"],
   },
   Rotation: {
-    label: "Rotation",
-    hint: "RX/RY/RZ clusters build a rotation-focused scoring lane.",
+    label: "旋转流",
+    hint: "围绕 RX/RY/RZ 组成连续旋转牌型。",
     gates: ["RX", "RY", "RZ"],
     wants: ["RX", "RY", "RZ"],
   },
   Tempo: {
-    label: "Tempo",
-    hint: "Safety and recovery picks keep a run alive after bad measurements.",
+    label: "节奏流",
+    hint: "用容错和补救效果提高失误后的续航。",
     gates: [],
-    wants: ["survival", "extra attempts", "fallback scoring"],
+    wants: ["保命效果", "额外机会", "兜底得分"],
   },
   Wildcard: {
-    label: "Wildcard",
-    hint: "Flexible picks support mixed quantum hands.",
+    label: "混搭流",
+    hint: "适合还没定型的混合量子手牌。",
     gates: [],
-    wants: ["any high-value hand"],
+    wants: ["任意高价值牌型"],
   },
 };
+
+const EVENT_TEXT = {
+  CALIBRATION_DRIFT: {
+    name: "校准漂移",
+    desc: "本关第一次打出 H 时，获得额外倍率。",
+  },
+  NOISY_HARDWARE: {
+    name: "噪声硬件",
+    desc: "本关出牌/放门超过 3 张后，结算会受到噪声惩罚。",
+  },
+  CHEAP_MEASUREMENT: {
+    name: "廉价测量",
+    desc: "本关测量代价降低，观察或测量更安全。",
+  },
+  PHASE_EXPERIMENT: {
+    name: "相位实验",
+    desc: "Z/CZ/RZ 这类相位门会提供额外奖励。",
+  },
+  ENTANGLEMENT_TAX: {
+    name: "纠缠税",
+    desc: "CNOT 更强，但会消耗一部分资源。",
+  },
+};
+
+const BONUS_OBJECTIVE_TEXT = {
+  LOW_GATE_CLEAR: {
+    name: "极简线路",
+    desc: "本关通关时，最后一手不超过 3 个门。",
+  },
+  HIGH_FIDELITY: {
+    name: "干净态",
+    desc: "任意一手达到至少 90% 保真度。",
+  },
+  NO_CNOT_CLEAR: {
+    name: "无纠缠路线",
+    desc: "本关通关时，最后一手不使用 CNOT。",
+  },
+  Z_SCORE: {
+    name: "相位标记",
+    desc: "使用 Z/CZ/RZ 并成功得分。",
+  },
+  BELL_PAIR: {
+    name: "Bell Pair 触发",
+    desc: "打出一次 Bell Pair 牌型。",
+  },
+  TWO_HAND_CLIMB: {
+    name: "连续提分",
+    desc: "连续两手都比上一手得分更高。",
+  },
+};
+
+const EVENT_NOTE_TEXT = [
+  ["+1.5 mult from first H", "第一次 H：+1.5 倍率"],
+  ["+2 mult from first H", "第一次 H：+2 倍率"],
+  ["-15% chips after 3 gates", "超过 3 个门：筹码 -15%"],
+  ["-18% fidelity after 3 cards", "超过 3 张牌：保真度 -18%"],
+  ["+0.10 fidelity from cheap measurement", "廉价测量：保真度 +0.10"],
+  ["chips from phase cards", "相位门额外筹码"],
+  ["chips from CNOT", "CNOT 额外筹码，同时缴纳纠缠税"],
+  ["score from Entanglement Tax", "纠缠税消耗分数"],
+  ["chips per Z", "每个 Z 额外筹码"],
+  ["CNOT, -80 score", "CNOT 增强，结算时 -80 分"],
+];
+
+function localizeEvent(event = {}) {
+  const text = EVENT_TEXT[event.id] || {};
+  return {
+    ...event,
+    name: text.name || event.name,
+    desc: text.desc || event.desc,
+  };
+}
+
+function localizeEventNote(note = "") {
+  if (!note) return "";
+  const match = EVENT_NOTE_TEXT.find(([source]) => note.includes(source));
+  return match ? match[1] : note;
+}
+
+function localizeBonusObjective(objective = {}) {
+  const text = BONUS_OBJECTIVE_TEXT[objective.id] || {};
+  return {
+    ...objective,
+    name: text.name || objective.name,
+    desc: text.desc || objective.desc,
+  };
+}
+
+function localizeRoulette(item = {}) {
+  const text = {
+    SAFE: ["安全", "波形稳定"],
+    "-1 HAND": ["-1 次出手", "时间膨胀"],
+    "RESET MULT": ["重置倍率", "倍率坍缩"],
+    "-200 CHIPS": ["-200 筹码", "能量泄漏"],
+  }[item.name];
+  return text ? { ...item, name: text[0], message: text[1] } : item;
+}
 
 function normalizeGateName(gate) {
   if (!gate) return "";
@@ -321,15 +418,15 @@ export default function GamePage() {
   };
 
   if (!gameState) {
-    return <div className="quantum-game">Loading quantum workspace...</div>;
+    return <div className="quantum-game">正在加载量子游戏...</div>;
   }
 
   return (
     <div className="quantum-game">
       <button className="codex-toggle" onClick={() => setCodexOpen(true)}>
-        Concept Codex <span>{conceptIds.length}/{CONCEPT_LIBRARY.length}</span>
+        概念图鉴 <span>{conceptIds.length}/{CONCEPT_LIBRARY.length}</span>
       </button>
-      {newConceptCount > 0 && <div className="codex-toast">+{newConceptCount} concept unlocked</div>}
+      {newConceptCount > 0 && <div className="codex-toast">解锁 {newConceptCount} 条新概念</div>}
       {codexOpen && (
         <ConceptCodexModal
           unlockedIds={conceptIds}
@@ -351,8 +448,8 @@ export default function GamePage() {
 function GameLobby({ gamesList, onStart }) {
   return (
     <main className="selection-screen">
-      <h1 className="main-title">Quantum Games</h1>
-      <p className="subtitle">Choose a game. Both run inside the platform through the FastAPI game bridge.</p>
+      <h1 className="main-title">量子游戏</h1>
+      <p className="subtitle">选择一个游戏开始。两个游戏都会在平台内直接运行。</p>
       <div className="games-grid">
         {gamesList.map((game) => (
           <article key={game.id} className="game-entry-card">
@@ -361,7 +458,7 @@ function GameLobby({ gamesList, onStart }) {
             <p>{game.desc}</p>
             <code>{game.dir}</code>
             <button className="btn-enter" onClick={() => onStart(game.id)}>
-              Enter Game
+              开始游戏
             </button>
           </article>
         ))}
@@ -534,20 +631,27 @@ function CircuitGame({ state, onRefresh, onExit }) {
           <ProgressMeter current={state.score} target={state.level.target} />
         </div>
         <div className="stats">
-          <span>Blind {state.level_index + 1}/{state.level_count}</span>
-          <span>Score {state.score} / {state.level.target}</span>
-          <span>Hands {state.hands_left}</span>
-          <span>Funds ${state.money}</span>
-          <span>Deck {state.deck_count} / Discard {state.discard_count}</span>
+          <span>关卡 {state.level_index + 1}/{state.level_count}</span>
+          <span>分数 {state.score} / {state.level.target}</span>
+          <span>出手机会 {state.hands_left}</span>
+          <span>资金 ${state.money}</span>
+          <span>牌库 {state.deck_count} / 弃牌 {state.discard_count}</span>
         </div>
       </header>
 
       <section className="main-layout">
-        {playAnimating && <MeasurementBurst label="Measuring circuit" />}
+        {playAnimating && <MeasurementBurst label="测量线路" />}
+        <aside className="side-panel">
+          <LevelEventPanel event={state.blind_event} note={state.preview?.event_note} />
+          <BonusObjectivePanel objective={state.bonus_objective} rewardUnit="资金" />
+          <JokerBuildPanel jokers={state.owned_jokers} gates={stagedEvolutionGates} compact />
+          <QuantumRecapPanel recap={state.last_recap} />
+        </aside>
+
         <div className="circuit-board">
           <div className="section-head">
-            <h3>Quantum Circuit</h3>
-            <span className="selected-gate-readout">Selected {selectedCard ? `${selectedCard.gate} #${selectedCard.id}` : "No card"}</span>
+            <h3>量子线路</h3>
+            <span className="selected-gate-readout">已选 {selectedCard ? `${selectedCard.gate} #${selectedCard.id}` : "无"}</span>
           </div>
 
           <div className="gate-palette circuit-card-hand" aria-label="Gate card hand">
@@ -569,7 +673,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
                 </button>
               );
             })}
-            {!handCards.length && <p className="empty-hand-note">No gate cards in hand.</p>}
+            {!handCards.length && <p className="empty-hand-note">当前没有可用门卡。</p>}
           </div>
 
           {[0, 1].map((qubit) => (
@@ -585,7 +689,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
                       onClick={() => (gate ? removeGate(qubit, slot) : setGate(qubit, slot))}
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => dropGate(event, qubit, slot)}
-                      title={gate ? "Click to return card to hand" : selectedCard ? `Play ${selectedCard.gate}` : "No card selected"}
+                      title={gate ? "点击收回手牌" : selectedCard ? `放置 ${selectedCard.gate}` : "还没有选牌"}
                     >
                       {gate?.gate || "+"}
                     </button>
@@ -599,27 +703,25 @@ function CircuitGame({ state, onRefresh, onExit }) {
         <aside className="control-panel">
           <ProbabilityChart probabilities={state.probabilities} targets={state.level.target_probs} />
           <StateEvolutionTimeline gates={stagedEvolutionGates} qubits={2} />
-          <JokerBuildPanel jokers={state.owned_jokers} gates={stagedEvolutionGates} compact />
           <div className="preview-box">
-            <span>Preview</span>
+            <span>预览</span>
             <strong>{state.preview.chips} x {state.preview.mult} = {state.preview.total}</strong>
           </div>
           <CircuitScoreBreakdown state={state} />
-          <QuantumRecapPanel recap={state.last_recap} />
-          {state.stored_mult > 1 && <div className="notice">Stored multiplier x{state.stored_mult}</div>}
+          {state.stored_mult > 1 && <div className="notice">已保存倍率 x{state.stored_mult}</div>}
           {state.warning && <div className="warning">{state.warning}</div>}
-          <button className="btn btn-observe" onClick={() => action("/circuit/observe")}>Observe</button>
-          <button className="btn btn-play-hand" onClick={playCircuitHand}>Play Hand</button>
-          <button className="btn btn-clear" onClick={() => action("/circuit/clear")}>Clear Circuit</button>
+          <button className="btn btn-observe" onClick={() => action("/circuit/observe")}>观察</button>
+          <button className="btn btn-play-hand" onClick={playCircuitHand}>结算本手</button>
+          <button className="btn btn-clear" onClick={() => action("/circuit/clear")}>清空线路</button>
         </aside>
       </section>
 
       {state.phase !== "PLAYING" && (
         <div className="game-overlay">
-          <h2>{state.phase === "GAME_OVER" ? "Wave Collapsed" : state.phase === "WIN" ? "Run Won" : "Blind Defeated"}</h2>
+          <h2>{state.phase === "GAME_OVER" ? "波函数坍缩" : state.phase === "WIN" ? "通关成功" : "关卡完成"}</h2>
           <CircuitFormulaSummary state={state} />
           <QuantumRecapPanel recap={state.last_recap} compact />
-          <button className="btn btn-play-hand" onClick={() => action("/start/game1")}>Restart</button>
+          <button className="btn btn-play-hand" onClick={() => action("/start/game1")}>重新开始</button>
         </div>
       )}
     </main>
@@ -628,6 +730,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
 
 function CircuitRoulette({ state, onAction, onExit, onRules }) {
   const [revealed, setRevealed] = useState(false);
+  const rouletteResult = localizeRoulette(state.last_roulette);
   const hitIndex = Math.max(
     0,
     state.roulette_items.findIndex((item) => item.name === state.last_roulette?.name),
@@ -646,13 +749,13 @@ function CircuitRoulette({ state, onAction, onExit, onRules }) {
       <TopBar onExit={onExit} onRules={onRules} />
       <header className="hud">
         <div>
-          <h2>Wave Collapse Roulette</h2>
-          <p>Observation stored the multiplier, then collapsed the circuit into a random event.</p>
+          <h2>测量轮盘</h2>
+          <p>观察会保存当前倍率，同时让线路坍缩为一个随机事件。</p>
         </div>
         <div className="stats">
-          <span>Score {state.score} / {state.level.target}</span>
-          <span>Hands {state.hands_left}</span>
-          <span>Stored x{state.stored_mult}</span>
+          <span>分数 {state.score} / {state.level.target}</span>
+          <span>出手机会 {state.hands_left}</span>
+          <span>已保存 x{state.stored_mult}</span>
         </div>
       </header>
 
@@ -672,23 +775,23 @@ function CircuitRoulette({ state, onAction, onExit, onRules }) {
         </div>
         {revealed ? (
           <div className={`roulette-result result-${state.last_roulette?.color || "green"}`}>
-            <strong>{state.last_roulette?.name}</strong>
-            <span>{state.last_roulette?.message}</span>
+            <strong>{rouletteResult?.name}</strong>
+            <span>{rouletteResult?.message}</span>
           </div>
         ) : (
           <div className="roulette-result roulette-pending">
-            <strong>Spinning...</strong>
-            <span>Collapsing the waveform</span>
+            <strong>旋转中...</strong>
+            <span>正在坍缩波形</span>
           </div>
         )}
         <RouletteChances chances={state.roulette_chances} />
         {revealed ? (
           <button className="btn btn-play-hand" onClick={() => onAction("/circuit/roulette/continue")}>
-            Continue
+            继续
           </button>
         ) : (
           <button className="btn btn-clear" disabled>
-            Spinning
+            旋转中
           </button>
         )}
       </section>
@@ -702,19 +805,19 @@ function CircuitShop({ state, onAction, onExit, onRules }) {
       <TopBar onExit={onExit} onRules={onRules} />
       <header className="hud">
         <div>
-          <h2>Quantum Hacker Shop</h2>
-          <p>Buy up to two jokers. Active jokers change circuit scoring and boss constraints.</p>
+          <h2>Quantum Hacker 商店</h2>
+          <p>最多购买两个 Joker。启用的 Joker 会改变线路得分和 Boss 约束。</p>
         </div>
         <div className="stats">
-          <span>Funds ${state.money}</span>
-          <span>Blind {state.level_index + 1}/{state.level_count}</span>
-          <span>Jokers {state.owned_jokers.length}/2</span>
+          <span>资金 ${state.money}</span>
+          <span>关卡 {state.level_index + 1}/{state.level_count}</span>
+          <span>Joker {state.owned_jokers.length}/2</span>
         </div>
       </header>
 
       <section className="shop-layout">
         <div className="shop-shelf">
-          <h3>Jokers</h3>
+          <h3>Joker</h3>
           <div className="shop-items">
             {state.shop_jokers.length ? (
               state.shop_jokers.map((joker) => (
@@ -730,12 +833,12 @@ function CircuitShop({ state, onAction, onExit, onRules }) {
                     onClick={() => onAction(`/circuit/shop/buy/${joker.id}`)}
                     disabled={state.money < joker.cost || state.owned_jokers.length >= 2}
                   >
-                    Buy Joker
+                    购买 Joker
                   </button>
                 </article>
               ))
             ) : (
-              <p className="empty-hand-note">No jokers left in this shop.</p>
+              <p className="empty-hand-note">本次商店没有剩余 Joker。</p>
             )}
           </div>
         </div>
@@ -744,7 +847,7 @@ function CircuitShop({ state, onAction, onExit, onRules }) {
           <JokerBuildPanel jokers={state.owned_jokers} gates={state.last_recap?.gates || []} />
           <CircuitFormulaSummary state={state} />
           <QuantumRecapPanel recap={state.last_recap} compact />
-          <h3>Owned Jokers</h3>
+          <h3>已拥有 Joker</h3>
           {state.owned_jokers.length ? (
             state.owned_jokers.map((joker) => {
               const active = state.active_jokers.includes(joker.id);
@@ -756,15 +859,15 @@ function CircuitShop({ state, onAction, onExit, onRules }) {
                 >
                   <strong>{joker.name}</strong>
                   <em>{joker.archetype || jokerArchetype(joker)}</em>
-                  <span>{active ? "Active" : "Inactive"} - {joker.desc}</span>
+                  <span>{active ? "已启用" : "未启用"} - {joker.desc}</span>
                 </button>
               );
             })
           ) : (
-            <p className="empty-hand-note">No owned jokers yet.</p>
+            <p className="empty-hand-note">还没有拥有 Joker。</p>
           )}
           <button className="btn btn-play-hand" onClick={() => onAction("/circuit/next")}>
-            Next Blind
+            下一关
           </button>
         </aside>
       </section>
@@ -951,21 +1054,29 @@ function CardGame({ state, onRefresh, onExit }) {
       <header className="hud">
         <div>
           <h2>Quantum Balatro Original</h2>
-          <p>Build a hand by placing gate cards into qubit slots.</p>
+          <p>把门卡放进量子比特插槽，组成一手量子牌型。</p>
           <ProgressMeter current={state.current_score} target={state.target_score} />
         </div>
         <div className="stats">
-          <span>Chips ${state.chips}</span>
-          <span>Score {state.current_score} / {state.target_score}</span>
-          <span>Plays {state.plays_left}</span>
-          <span>Discards {state.discards_left}</span>
+          <span>筹码 ${state.chips}</span>
+          <span>分数 {state.current_score} / {state.target_score}</span>
+          <span>出手 {state.plays_left}</span>
+          <span>弃牌 {state.discards_left}</span>
         </div>
       </header>
 
       <section className="main-layout">
-        {playAnimating && <MeasurementBurst label="Measuring hand" />}
+        {playAnimating && <MeasurementBurst label="测量手牌" />}
+        <aside className="side-panel">
+          <TeachingPanel lesson={state.lesson} />
+          <LevelEventPanel event={state.blind_event} note={state.last_score_breakdown?.event_note} />
+          <BonusObjectivePanel objective={state.bonus_objective} rewardUnit="筹码" />
+          <JokerBuildPanel jokers={state.jokers} gates={stagedEvolutionGates} compact />
+          <QuantumRecapPanel recap={state.last_recap} />
+        </aside>
+
         <div className="circuit-board">
-          <h3>Card Staging Circuit</h3>
+          <h3>出牌线路</h3>
           <div className="circuit-grid">
           {Array.from({ length: state.num_qubits }, (_, qubit) => (
             <div key={qubit} className="circuit-row">
@@ -988,7 +1099,7 @@ function CardGame({ state, onRefresh, onExit }) {
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => dropCard(event, qubit, slot)}
                       onClick={() => card && unstageSlot(qubit, slot)}
-                      title={card ? "Drag to another slot or click to remove" : "Drop a card here"}
+                      title={card ? "拖到其他插槽，或点击移除" : "把卡牌拖到这里"}
                     >
                       {isControlled && (
                         <span
@@ -1000,7 +1111,7 @@ function CardGame({ state, onRefresh, onExit }) {
                       {card?.gate || "+"}
                       {isControlled && (
                         <label className="target-picker" onClick={(event) => event.stopPropagation()}>
-                          <span>to</span>
+                          <span>到</span>
                           <select
                             value={targetQubit}
                             onChange={(event) => setControlledTarget(qubit, slot, event.target.value)}
@@ -1035,33 +1146,30 @@ function CardGame({ state, onRefresh, onExit }) {
 
         <aside className="control-panel">
           <div className="preview-box">
-            <span>Last hand</span>
+            <span>上一手</span>
             <strong>{state.last_hand_played}</strong>
           </div>
           <CardScoreBreakdown breakdown={state.last_score_breakdown} />
-          <TeachingPanel lesson={state.lesson} />
           <StateEvolutionTimeline gates={stagedEvolutionGates} qubits={state.num_qubits} />
-          <JokerBuildPanel jokers={state.jokers} gates={stagedEvolutionGates} compact />
-          <QuantumRecapPanel recap={state.last_recap} />
           <button className="btn btn-play-hand" onClick={playHand} disabled={!Object.keys(visibleStagedCards).length}>
-            Play Hand
+            结算本手
           </button>
           <button className="btn btn-discard" onClick={discard} disabled={!selectedCardIds.length}>
-            Discard Selected
+            弃掉已选
           </button>
           <button className="btn btn-clear" onClick={() => setStagedCards({})}>
-            Clear Stage
+            清空出牌区
           </button>
         </aside>
       </section>
 
       <section className="hand-area">
-        <h3>Hand Cards</h3>
+        <h3>手牌</h3>
         {state.phase !== "PLAYING" && (
           <p className="empty-hand-note">
             {state.phase === "REWARD"
-              ? "Blind cleared. Your hand was scored and moved to the discard pile."
-              : "This run is no longer in the playing phase."}
+              ? "关卡已完成。刚才的手牌已经结算并进入弃牌堆。"
+              : "当前已经不在出牌阶段。"}
           </p>
         )}
         <div className="cards-container">
@@ -1099,18 +1207,18 @@ function CardGame({ state, onRefresh, onExit }) {
         <div className="game-overlay">
           <h2>
             {state.phase === "REWARD"
-              ? "Blind Cleared"
+              ? "关卡完成"
               : state.phase === "VICTORY"
-                ? "Run Won"
-                : "Game Over"}
+                ? "通关成功"
+                : "游戏结束"}
           </h2>
-          {state.phase === "REWARD" && <p>Reward added. Chips: ${state.chips}</p>}
+          {state.phase === "REWARD" && <p>奖励已加入。当前筹码：${state.chips}</p>}
           <CardFormulaSummary breakdown={state.last_score_breakdown} />
           <QuantumRecapPanel recap={state.last_recap} compact />
           {state.phase === "REWARD" ? (
-            <button className="btn btn-play-hand" onClick={() => action("/cards/shop")}>Enter Shop</button>
+            <button className="btn btn-play-hand" onClick={() => action("/cards/shop")}>进入商店</button>
           ) : (
-            <button className="btn btn-play-hand" onClick={() => action("/start/game2")}>Restart</button>
+            <button className="btn btn-play-hand" onClick={() => action("/start/game2")}>重新开始</button>
           )}
         </div>
       )}
@@ -1124,20 +1232,20 @@ function CardShop({ state, onAction, onExit, onRules }) {
       <TopBar onExit={onExit} onRules={onRules} />
       <header className="hud">
         <div>
-          <h2>Quantum Shop</h2>
-          <p>Spend chips on jokers or add a quantum card pack to the deck.</p>
+          <h2>量子商店</h2>
+          <p>花费筹码购买 Joker，或把量子卡包加入牌库。</p>
         </div>
         <div className="stats">
-          <span>Chips ${state.chips}</span>
-          <span>Ante {state.ante}</span>
+          <span>筹码 ${state.chips}</span>
+          <span>轮次 {state.ante}</span>
           <span>{state.blind_index + 1} / 3</span>
-          <span>Jokers {state.jokers.length} / 5</span>
+          <span>Joker {state.jokers.length} / 5</span>
         </div>
       </header>
 
       <section className="shop-layout">
         <div className="shop-shelf">
-          <h3>Jokers</h3>
+          <h3>Joker</h3>
           <div className="shop-items">
             {state.shop_jokers.length ? (
               state.shop_jokers.map((joker) => (
@@ -1153,39 +1261,39 @@ function CardShop({ state, onAction, onExit, onRules }) {
                     onClick={() => onAction(`/cards/buy-joker/${joker.index}`)}
                     disabled={state.chips < joker.cost || state.jokers.length >= 5}
                   >
-                    Buy Joker
+                    购买 Joker
                   </button>
                 </article>
               ))
             ) : (
-              <p className="empty-hand-note">No jokers left in this shop.</p>
+              <p className="empty-hand-note">本次商店没有剩余 Joker。</p>
             )}
           </div>
         </div>
 
         <aside className="shop-side">
           <JokerBuildPanel jokers={state.jokers} gates={state.last_recap?.gates || []} />
-          <h3>Pack</h3>
+          <h3>卡包</h3>
           {state.shop_pack ? (
             <article className="shop-card pack-shop-card">
               <span className="shop-type">PACK</span>
               <h4>{state.shop_pack.name}</h4>
-              <p>{state.shop_pack.desc || "Open to reveal a quantum gate card, then collect it into your deck."}</p>
+              <p>{state.shop_pack.desc || "打开后获得一张量子门卡，并加入你的牌库。"}</p>
               <strong>${state.shop_pack.cost}</strong>
               <button
                 className="btn btn-observe"
                 onClick={() => onAction("/cards/buy-pack")}
                 disabled={state.chips < state.shop_pack.cost}
               >
-                Buy Pack
+                购买卡包
               </button>
             </article>
           ) : (
-            <p className="empty-hand-note">Pack sold out.</p>
+            <p className="empty-hand-note">卡包已售罄。</p>
           )}
 
           <div className="owned-jokers">
-            <h3>Owned Jokers</h3>
+            <h3>已拥有 Joker</h3>
             {state.jokers.map((joker, index) => (
               <div key={`${joker.name}-${index}`} className="owned-joker">
                 <strong>{joker.name}</strong>
@@ -1196,7 +1304,7 @@ function CardShop({ state, onAction, onExit, onRules }) {
           </div>
 
           <button className="btn btn-play-hand" onClick={() => onAction("/cards/next")}>
-            Next Blind
+            下一关
           </button>
         </aside>
       </section>
@@ -1231,7 +1339,7 @@ function PackOpening({ state, onAction, onExit, onRules }) {
     <main className="board-screen pack-screen">
       <TopBar onExit={onExit} onRules={onRules} />
       <section className="pack-stage">
-        <h2>Quantum Pack</h2>
+        <h2>量子卡包</h2>
         <div className={`pack-opening ${revealStep}`}>
           <div className="pack-shell" aria-hidden={revealStep === "revealed"}>
             <div className="pack-core">
@@ -1247,22 +1355,22 @@ function PackOpening({ state, onAction, onExit, onRules }) {
             <article className={`q-card pack-reveal rarity-${card.rarity}`} aria-hidden={revealStep !== "revealed"}>
               <strong>{card.gate}</strong>
               <span>{card.name}</span>
-              <small>Uses: {card.durability}</small>
+              <small>耐久：{card.durability}</small>
               {card.lesson && <small>{card.lesson}</small>}
             </article>
           )}
         </div>
         {revealStep === "sealed" ? (
           <button className="btn btn-observe" onClick={openPack} disabled={!card}>
-            Open Pack
+            打开卡包
           </button>
         ) : revealStep === "opening" ? (
           <button className="btn btn-clear" disabled>
-            Opening...
+            打开中...
           </button>
         ) : (
           <button className="btn btn-play-hand" onClick={() => onAction("/cards/collect-pack")}>
-            Collect Card
+            收下卡牌
           </button>
         )}
       </section>
@@ -1273,7 +1381,7 @@ function PackOpening({ state, onAction, onExit, onRules }) {
 function ProbabilityChart({ probabilities, targets }) {
   return (
     <div className="prob-chart">
-      <h3>Target Match</h3>
+      <h3>目标匹配</h3>
       <div className="bars">
         {STATES.map((stateName) => {
           const current = probabilities[stateName] || 0;
@@ -1296,28 +1404,40 @@ function ProbabilityChart({ probabilities, targets }) {
 
 function CircuitScoreBreakdown({ state }) {
   const chances = state.roulette_chances || {};
+  const chanceNames = {
+    SAFE: "安全",
+    "-1 HAND": "-1 次出手",
+    "RESET MULT": "重置倍率",
+    "-200 CHIPS": "-200 筹码",
+  };
   return (
     <div className="score-breakdown">
-      <h3>Score Breakdown</h3>
+      <h3>分数拆解</h3>
       <div className="score-line">
-        <span>Target match</span>
+        <span>目标匹配</span>
         <strong>{state.preview.match_chips}</strong>
       </div>
       <div className="score-line">
-        <span>Gate multiplier</span>
+        <span>门倍率</span>
         <strong>x{state.preview.gate_mult}</strong>
       </div>
       <div className="score-line">
-        <span>Stored multiplier</span>
+        <span>已保存倍率</span>
         <strong>x{state.preview.stored_mult}</strong>
       </div>
+      {state.preview.event_note && (
+        <div className="score-line">
+          <span>事件</span>
+          <strong>{localizeEventNote(state.preview.event_note)}</strong>
+        </div>
+      )}
       <div className="score-line">
-        <span>Observe risk</span>
-        <strong>{state.observe_count} used</strong>
+        <span>观察风险</span>
+        <strong>已用 {state.observe_count} 次</strong>
       </div>
       <div className="chance-grid">
         {Object.entries(chances).map(([name, chance]) => (
-          <span key={name}>{name}: {chance}%</span>
+          <span key={name}>{chanceNames[name] || name}: {chance}%</span>
         ))}
       </div>
     </div>
@@ -1334,15 +1454,15 @@ function CircuitFormulaSummary({ state }) {
 
   return (
     <div className="formula-card">
-      <span className="formula-label">Last Formula</span>
-      <h3>Quantum Probability Score</h3>
+      <span className="formula-label">上一局公式</span>
+      <h3>量子概率得分</h3>
       <div className="formula-line">
         <code>P(s) = |amplitude(s)|^2</code>
-        <small>measurement probability from the circuit statevector</small>
+        <small>由线路态向量得到测量概率</small>
       </div>
       <div className="formula-line">
         <code>chips = 200 x sum(min(P(s), target(s)))</code>
-        <strong>{chips} chips</strong>
+        <strong>{chips} 筹码</strong>
       </div>
       <div className="formula-line">
         <code>score = floor(chips x multiplier)</code>
@@ -1356,29 +1476,35 @@ function CardScoreBreakdown({ breakdown }) {
   if (!breakdown || breakdown.hand === "None") {
     return (
       <div className="score-breakdown">
-        <h3>Last Score</h3>
-        <p className="empty-hand-note">Play a staged circuit to measure fidelity.</p>
+        <h3>上一手得分</h3>
+        <p className="empty-hand-note">先放置线路，再测量保真度。</p>
       </div>
     );
   }
 
   return (
     <div className="score-breakdown">
-      <h3>Last Score</h3>
+      <h3>上一手得分</h3>
       <div className="score-line">
-        <span>Base</span>
+        <span>基础</span>
         <strong>{breakdown.base_chips} x {breakdown.base_mult}</strong>
       </div>
       <div className="score-line">
         <span>Jokers</span>
-        <strong>+{breakdown.joker_chips_delta} chips / +{breakdown.joker_mult_delta} mult</strong>
+        <strong>+{breakdown.joker_chips_delta} 筹码 / +{breakdown.joker_mult_delta} 倍率</strong>
       </div>
       <div className="score-line">
-        <span>Fidelity</span>
+        <span>保真度</span>
         <strong>{Math.round((breakdown.fidelity || 0) * 100)}%</strong>
       </div>
+      {breakdown.event_note && (
+        <div className="score-line">
+          <span>事件</span>
+          <strong>{localizeEventNote(breakdown.event_note)}</strong>
+        </div>
+      )}
       <div className="score-line total">
-        <span>Total</span>
+        <span>合计</span>
         <strong>{breakdown.score}</strong>
       </div>
     </div>
@@ -1394,11 +1520,11 @@ function CardFormulaSummary({ breakdown }) {
 
   return (
     <div className="formula-card">
-      <span className="formula-label">Last Formula</span>
+      <span className="formula-label">上一局公式</span>
       <h3>{breakdown.hand}</h3>
       <div className="formula-line">
         <code>F = |&lt;target | current&gt;|^2</code>
-        <strong>{Math.round(fidelity * 100)}% fidelity</strong>
+        <strong>{Math.round(fidelity * 100)}% 保真度</strong>
       </div>
       <div className="formula-line">
         <code>chips = base + joker bonus</code>
@@ -1412,6 +1538,42 @@ function CardFormulaSummary({ breakdown }) {
   );
 }
 
+function LevelEventPanel({ event, note }) {
+  if (!event?.name) return null;
+  const displayEvent = localizeEvent(event);
+  const result = localizeEventNote(note || event.last_result);
+
+  return (
+    <div className={`level-event event-${String(event.id || "unknown").toLowerCase()}`}>
+      <span className="formula-label">关卡事件</span>
+      <div className="event-head">
+        <h3>{displayEvent.name}</h3>
+        {event.used && <strong>已触发</strong>}
+      </div>
+      <p>{displayEvent.desc}</p>
+      {result && <small>{result}</small>}
+    </div>
+  );
+}
+
+function BonusObjectivePanel({ objective, rewardUnit = "奖励" }) {
+  if (!objective?.name) return null;
+  const displayObjective = localizeBonusObjective(objective);
+  const stateText = objective.claimed ? "已领取" : objective.complete ? "已完成" : "进行中";
+
+  return (
+    <div className={`bonus-objective ${objective.complete ? "complete" : ""}`}>
+      <span className="formula-label">支线目标</span>
+      <div className="event-head">
+        <h3>{displayObjective.name}</h3>
+        <strong>{stateText}</strong>
+      </div>
+      <p>{displayObjective.desc}</p>
+      <small>奖励：+{objective.reward || 0} {rewardUnit}</small>
+    </div>
+  );
+}
+
 function JokerBuildPanel({ jokers = [], gates = [], compact = false }) {
   const builds = buildSynergySummary(jokers, gates);
   const primary = builds[0];
@@ -1420,10 +1582,10 @@ function JokerBuildPanel({ jokers = [], gates = [], compact = false }) {
 
   return (
     <div className={`build-panel ${compact ? "compact" : ""}`}>
-      <span className="formula-label">Joker Build</span>
+      <span className="formula-label">Joker 流派</span>
       <div className="build-head">
-        <h3>{primary.label} Line</h3>
-        <strong>{ownedCount ? `${ownedCount} relic${ownedCount > 1 ? "s" : ""}` : "No relics"}</strong>
+        <h3>{primary.label}</h3>
+        <strong>{ownedCount ? `${ownedCount} 个遗物` : "暂无遗物"}</strong>
       </div>
       <p>{primary.hint}</p>
       <div className="build-track">
@@ -1439,7 +1601,7 @@ function JokerBuildPanel({ jokers = [], gates = [], compact = false }) {
         ))}
       </div>
       <div className="build-next">
-        <span>Next pick</span>
+        <span>下一步优先</span>
         <strong>{nextWants}</strong>
       </div>
     </div>
@@ -1454,39 +1616,39 @@ function QuantumRecapPanel({ recap, compact = false }) {
 
   const gateText = recap.gates
     .map((item) => (typeof item === "string" ? item : `${item.gate}(q${item.qubit})`))
-    .join(" -> ") || "No gates played";
+    .join(" -> ") || "还没有打出量子门";
 
   return (
     <div className={`quantum-recap ${compact ? "compact" : ""}`}>
-      <span className="formula-label">Quantum Recap</span>
-      <h3>{recap.title || "Last hand"}</h3>
+      <span className="formula-label">量子回顾</span>
+      <h3>{recap.title || "上一手"}</h3>
       <div className="recap-line">
-        <span>Gate path</span>
+        <span>门序列</span>
         <code>{gateText}</code>
       </div>
       {recap.type === "probability" ? (
         <>
           <div className="recap-line">
-            <span>Measured probabilities</span>
+            <span>测量概率</span>
             <code>{formatProbabilityMap(recap.probabilities)}</code>
           </div>
           <div className="recap-line">
-            <span>Target</span>
+            <span>目标</span>
             <code>{formatProbabilityMap(recap.targets)}</code>
           </div>
           <div className="recap-line">
-            <span>Result</span>
-            <strong>{recap.chips} chips x {recap.mult} = {recap.score}</strong>
+            <span>结果</span>
+            <strong>{recap.chips} 筹码 x {recap.mult} = {recap.score}</strong>
           </div>
         </>
       ) : (
         <>
           <div className="recap-line">
-            <span>State comparison</span>
+            <span>态比较</span>
             <code>F = |&lt;target|current&gt;|^2</code>
           </div>
           <div className="recap-line">
-            <span>Fidelity</span>
+            <span>保真度</span>
             <strong>{Math.round((recap.fidelity || 0) * 100)}%</strong>
           </div>
         </>
@@ -1498,7 +1660,7 @@ function QuantumRecapPanel({ recap, compact = false }) {
 
 function formatProbabilityMap(map = {}) {
   const entries = Object.entries(map);
-  if (!entries.length) return "none";
+  if (!entries.length) return "无";
   return entries
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([state, value]) => `${state}: ${Math.round(Number(value || 0) * 100)}%`)
@@ -1510,10 +1672,10 @@ function StateEvolutionTimeline({ gates = [], qubits = 2 }) {
   return (
     <div className="state-evolution">
       <div className="state-evolution-head">
-        <h3>State Evolution</h3>
-        <span>{gates.length ? `${gates.length} gate${gates.length > 1 ? "s" : ""}` : "idle"}</span>
+        <h3>态演化</h3>
+        <span>{gates.length ? `${gates.length} 个门` : "待放置"}</span>
       </div>
-      <div className="evolution-track" aria-label="Quantum state evolution timeline">
+      <div className="evolution-track" aria-label="量子态演化时间线">
         {steps.map((step, index) => (
           <div key={`${step.label}-${index}`} className={`evolution-step ${step.kind}`}>
             <code>{step.label}</code>
@@ -1526,7 +1688,7 @@ function StateEvolutionTimeline({ gates = [], qubits = 2 }) {
 }
 
 function buildEvolutionSteps(gates = [], qubits = 2) {
-  const steps = [{ label: `|${"0".repeat(Math.max(1, qubits))}>`, note: "initial basis state", kind: "state" }];
+  const steps = [{ label: `|${"0".repeat(Math.max(1, qubits))}>`, note: "初始基态", kind: "state" }];
   const seen = [];
   gates.forEach((item) => {
     const gate = item.gate || "?";
@@ -1536,21 +1698,21 @@ function buildEvolutionSteps(gates = [], qubits = 2) {
     steps.push({ label: inferStateLabel(seen), note: inferStateNote(seen), kind: "state" });
   });
   if (!gates.length) {
-    steps.push({ label: "add a gate", note: "timeline updates as you stage cards", kind: "hint" });
+    steps.push({ label: "放置一个门", note: "出牌后这里会显示态演化", kind: "hint" });
   }
   return steps;
 }
 
 function gateEvolutionNote(gate, item = {}) {
-  if (gate === "H") return "creates superposition";
-  if (gate === "X") return "flips basis value";
-  if (gate === "Z") return "changes phase sign";
-  if (gate === "CNOT" || gate === "CX") return targetNote(item, "conditional flip");
-  if (gate === "CZ") return targetNote(item, "conditional phase");
-  if (gate === "SWAP") return targetNote(item, "exchange states");
-  if (["RX", "RY", "RZ"].includes(gate)) return "continuous rotation";
-  if (gate === "CCX") return "two-control flip";
-  return "updates the quantum state";
+  if (gate === "H") return "制造叠加态";
+  if (gate === "X") return "翻转基态取值";
+  if (gate === "Z") return "改变相位符号";
+  if (gate === "CNOT" || gate === "CX") return targetNote(item, "条件翻转");
+  if (gate === "CZ") return targetNote(item, "条件相位");
+  if (gate === "SWAP") return targetNote(item, "交换状态");
+  if (["RX", "RY", "RZ"].includes(gate)) return "连续旋转";
+  if (gate === "CCX") return "双控制翻转";
+  return "更新量子态";
 }
 
 function targetNote(item, fallback) {
@@ -1559,42 +1721,43 @@ function targetNote(item, fallback) {
 }
 
 function inferStateLabel(gates) {
-  if (gates.includes("CCX")) return "Toffoli control";
-  if (gates.includes("SWAP")) return "routed state";
-  if (gates.some((gate) => ["RX", "RY", "RZ"].includes(gate))) return "rotated state";
+  if (gates.includes("CCX")) return "Toffoli 控制态";
+  if (gates.includes("SWAP")) return "重排后的态";
+  if (gates.some((gate) => ["RX", "RY", "RZ"].includes(gate))) return "旋转后的态";
   if (gates.includes("CNOT") || gates.includes("CX") || gates.includes("CZ")) {
-    return gates.includes("H") ? "entangled state" : "correlated state";
+    return gates.includes("H") ? "纠缠态" : "相关态";
   }
-  if (gates.includes("H")) return "superposition";
-  if (gates.includes("Z")) return "phase-shifted state";
-  if (gates.includes("X")) return "flipped basis state";
-  return "current state";
+  if (gates.includes("H")) return "叠加态";
+  if (gates.includes("Z")) return "相位改变后的态";
+  if (gates.includes("X")) return "翻转后的基态";
+  return "当前态";
 }
 
 function inferStateNote(gates) {
   if (gates.includes("H") && (gates.includes("CNOT") || gates.includes("CX") || gates.includes("CZ"))) {
-    return "superposition plus control can create entanglement";
+    return "叠加态加受控门可能产生纠缠";
   }
-  if (gates.includes("H")) return "measurement can branch across outcomes";
-  if (gates.includes("Z")) return "probability may stay unchanged while phase changes";
-  if (gates.some((gate) => ["RX", "RY", "RZ"].includes(gate))) return "angle controls amplitude and phase";
-  return "state updated by the latest gate";
+  if (gates.includes("H")) return "测量结果会分支到多个可能状态";
+  if (gates.includes("Z")) return "概率可能不变，但相位已经改变";
+  if (gates.some((gate) => ["RX", "RY", "RZ"].includes(gate))) return "角度会影响振幅和相位";
+  return "最新量子门已经更新状态";
 }
 
 function ConceptCodexModal({ unlockedIds, onClose }) {
   const unlocked = new Set(unlockedIds);
   const groups = ["Gates", "States", "Formulas", "Systems"];
+  const groupNames = { Gates: "量子门", States: "量子态", Formulas: "公式", Systems: "系统机制" };
 
   return (
     <div className="codex-overlay" role="dialog" aria-modal="true" aria-labelledby="concept-codex-title">
       <section className="codex-modal">
         <div className="codex-header">
           <div>
-            <span className="formula-label">Auto Collection</span>
-            <h2 id="concept-codex-title">Quantum Concept Codex</h2>
-            <p>Concepts unlock when you see gates, create states, use formulas, clear blinds, or fail a run.</p>
+            <span className="formula-label">自动收集</span>
+            <h2 id="concept-codex-title">量子概念图鉴</h2>
+            <p>遇到量子门、生成量子态、使用公式、通关或失败时，都会自动解锁相关概念。</p>
           </div>
-          <button className="btn-back" onClick={onClose}>Close</button>
+          <button className="btn-back" onClick={onClose}>关闭</button>
         </div>
         <div className="codex-progress">
           <div className="progress-track">
@@ -1605,15 +1768,15 @@ function ConceptCodexModal({ unlockedIds, onClose }) {
         <div className="codex-groups">
           {groups.map((group) => (
             <div key={group} className="codex-group">
-              <h3>{group}</h3>
+              <h3>{groupNames[group] || group}</h3>
               <div className="codex-grid">
                 {CONCEPT_LIBRARY.filter((concept) => concept.group === group).map((concept) => {
                   const isUnlocked = unlocked.has(concept.id);
                   return (
                     <article key={concept.id} className={`codex-card ${isUnlocked ? "unlocked" : "locked"}`}>
-                      <span>{isUnlocked ? "Unlocked" : "Locked"}</span>
+                      <span>{isUnlocked ? "已解锁" : "未解锁"}</span>
                       <h4>{isUnlocked ? concept.title : "???"}</h4>
-                      <p>{isUnlocked ? concept.desc : "Discover this concept by playing more hands."}</p>
+                      <p>{isUnlocked ? concept.desc : "继续游玩即可发现这个概念。"}</p>
                     </article>
                   );
                 })}
@@ -1630,9 +1793,9 @@ function TeachingPanel({ lesson }) {
   if (!lesson?.title && !lesson?.body) return null;
   return (
     <div className="teaching-panel">
-      <h3>{lesson.title || "Quantum lesson"}</h3>
+      <h3>{lesson.title || "量子提示"}</h3>
       <p>{lesson.body}</p>
-      {lesson.gates?.length ? <small>Played gates: {lesson.gates.join(", ")}</small> : null}
+      {lesson.gates?.length ? <small>已打出的门：{lesson.gates.join(", ")}</small> : null}
     </div>
   );
 }
@@ -1644,7 +1807,7 @@ function LearningCatalog({ state }) {
   return (
     <section className="learning-catalog">
       <div>
-        <h3>Hand Types</h3>
+        <h3>牌型</h3>
         <div className="catalog-grid">
           {hands.map((hand) => (
             <span key={hand.name}>{hand.name}: {hand.chips} x {hand.mult}</span>
@@ -1652,7 +1815,7 @@ function LearningCatalog({ state }) {
         </div>
       </div>
       <div>
-        <h3>Pack Types</h3>
+        <h3>卡包类型</h3>
         <div className="catalog-grid">
           {packs.map((pack) => (
             <span key={pack.type}>{pack.name}: {pack.desc}</span>
@@ -1664,10 +1827,16 @@ function LearningCatalog({ state }) {
 }
 
 function RouletteChances({ chances = {} }) {
+  const chanceNames = {
+    SAFE: "安全",
+    "-1 HAND": "-1 次出手",
+    "RESET MULT": "重置倍率",
+    "-200 CHIPS": "-200 筹码",
+  };
   return (
     <div className="roulette-chances">
       {Object.entries(chances).map(([name, chance]) => (
-        <span key={name}>{name}: {chance}%</span>
+        <span key={name}>{chanceNames[name] || name}: {chance}%</span>
       ))}
     </div>
   );
@@ -1676,7 +1845,7 @@ function RouletteChances({ chances = {} }) {
 function ProgressMeter({ current, target }) {
   const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
   return (
-    <div className="progress-meter" aria-label={`Progress ${pct}%`}>
+    <div className="progress-meter" aria-label={`进度 ${pct}%`}>
       <div className="progress-track">
         <div className="progress-fill" style={{ width: `${pct}%` }} />
       </div>
@@ -1708,36 +1877,36 @@ function CircuitRulesPage({ onBack, onExit }) {
         <div className="rules-header">
           <div>
             <span className="game-badge static">circuit</span>
-            <h2>Quantum Hacker Rules</h2>
-            <p>Build a two-qubit circuit, match the target distribution, and decide when to lock in riskier multipliers.</p>
+            <h2>Quantum Hacker 规则</h2>
+            <p>搭建双量子比特线路，匹配目标概率分布，并判断何时冒险保存倍率。</p>
           </div>
-          <button className="btn btn-play-hand" onClick={onBack}>Back to Game</button>
+          <button className="btn btn-play-hand" onClick={onBack}>返回游戏</button>
         </div>
 
         <div className="rules-grid">
           <article className="rule-card">
-            <h3>Goal</h3>
-            <p>Each blind gives a target probability distribution. Your circuit produces probabilities for 00, 01, 10, and 11. Better overlap creates more base chips.</p>
+            <h3>目标</h3>
+            <p>每一关都会给出目标概率分布。你的线路会生成 00、01、10、11 的概率，重合越高，基础筹码越多。</p>
           </article>
           <article className="rule-card">
-            <h3>Gates</h3>
-            <p>H creates superposition and multiplies score. X flips a qubit. Z can become a multiplier with the Phase joker. CNOT entangles one qubit with the other.</p>
+            <h3>量子门</h3>
+            <p>H 制造叠加并提高倍率；X 翻转量子比特；Z 可配合相位 Joker；CNOT 会把两个量子比特关联起来。</p>
           </article>
           <article className="rule-card">
-            <h3>Play Hand</h3>
-            <p>Play Hand scores the current circuit, consumes one hand, clears the board, and resets stored multiplier back to x1.</p>
+            <h3>结算本手</h3>
+            <p>结算当前线路，消耗一次出手机会，清空棋盘，并把已保存倍率重置为 x1。</p>
           </article>
           <article className="rule-card">
             <h3>Observe</h3>
-            <p>Observe stores the current gate multiplier without spending a hand, then clears the circuit and spins roulette. More Observe uses and higher stored multiplier increase risk.</p>
+            <p>观察会保存当前门倍率，不消耗出手机会，但会清空线路并旋转轮盘。观察次数越多、倍率越高，风险越大。</p>
           </article>
           <article className="rule-card">
-            <h3>Roulette</h3>
-            <p>SAFE has no penalty. Other outcomes can remove one hand, reset stored multiplier, or remove score. The visible odds are the odds used for that spin.</p>
+            <h3>轮盘</h3>
+            <p>SAFE 没有惩罚。其他结果可能减少出手机会、重置倍率或扣分。界面显示的概率就是本次轮盘使用的概率。</p>
           </article>
           <article className="rule-card">
-            <h3>Shop</h3>
-            <p>After clearing a blind, buy up to two jokers. Active jokers change scoring or boss constraints, and can be toggled in the shop.</p>
+            <h3>商店</h3>
+            <p>通关后可以购买最多两个 Joker。启用的 Joker 会改变得分或 Boss 约束，也可以在商店里开关。</p>
           </article>
         </div>
       </section>
@@ -1753,36 +1922,36 @@ function CardRulesPage({ onBack, onExit }) {
         <div className="rules-header">
           <div>
             <span className="game-badge static">cards</span>
-            <h2>Quantum Balatro Original Rules</h2>
-            <p>Stage gate cards into qubit slots, make a quantum poker hand, and score through both hand type and state fidelity.</p>
+            <h2>Quantum Balatro Original 规则</h2>
+            <p>把门卡放进量子比特插槽，组成量子牌型，并通过牌型和态保真度共同得分。</p>
           </div>
-          <button className="btn btn-play-hand" onClick={onBack}>Back to Game</button>
+          <button className="btn btn-play-hand" onClick={onBack}>返回游戏</button>
         </div>
 
         <div className="rules-grid">
           <article className="rule-card">
-            <h3>Goal</h3>
-            <p>Reach the blind target before plays run out. Clearing a blind pays chips based on blind size and unused plays.</p>
+            <h3>目标</h3>
+            <p>在出手次数用完前达到目标分。通关后会根据关卡大小和剩余出手次数发放筹码。</p>
           </article>
           <article className="rule-card">
-            <h3>Staging</h3>
-            <p>Drag cards into the circuit. Slots determine the order cards are played, and the row determines the target qubit. CNOT uses the next qubit when needed.</p>
+            <h3>出牌</h3>
+            <p>把卡牌拖进线路。横向插槽决定出牌顺序，所在行决定作用的量子比特。CNOT 等受控门可以选择目标。</p>
           </article>
           <article className="rule-card">
-            <h3>Hand Types</h3>
-            <p>Gate combinations create hands such as Bell Pair, Flush, Full House, W State, and GHZ State. Stronger hands have higher base chips and multiplier.</p>
+            <h3>牌型</h3>
+            <p>不同门组合会形成 Bell Pair、Flush、Full House、W State、GHZ State 等牌型。更强牌型有更高基础筹码和倍率。</p>
           </article>
           <article className="rule-card">
-            <h3>Fidelity</h3>
-            <p>Your circuit is compared against the target quantum state for the detected hand. Higher fidelity preserves more of the base score.</p>
+            <h3>保真度</h3>
+            <p>系统会把你的线路态和目标量子态比较。保真度越高，基础分保留得越多。</p>
           </article>
           <article className="rule-card">
-            <h3>Discards</h3>
-            <p>Select hand cards and discard them to draw replacements. Discards are limited per blind, so use them to search for missing gate combinations.</p>
+            <h3>弃牌</h3>
+            <p>选择手牌并弃掉，可以抽取替换牌。每关弃牌次数有限，适合用来寻找缺少的门组合。</p>
           </article>
           <article className="rule-card">
-            <h3>Shop</h3>
-            <p>Spend chips on jokers or packs. Jokers alter scoring, while packs add new quantum cards such as RX phase cards to your deck.</p>
+            <h3>商店</h3>
+            <p>花费筹码购买 Joker 或卡包。Joker 改变结算，卡包会把 RX 等新量子门加入牌库。</p>
           </article>
         </div>
       </section>
@@ -1793,8 +1962,8 @@ function CardRulesPage({ onBack, onExit }) {
 function TopBar({ onExit, onRules }) {
   return (
     <div className="top-controls">
-      <button className="btn-back" onClick={onExit}>Back to Game Lobby</button>
-      {onRules && <button className="btn-back" onClick={onRules}>Rules</button>}
+      <button className="btn-back" onClick={onExit}>返回大厅</button>
+      {onRules && <button className="btn-back" onClick={onRules}>规则</button>}
     </div>
   );
 }
