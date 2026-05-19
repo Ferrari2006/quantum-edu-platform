@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import random
 import sys
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -27,6 +28,37 @@ from games.game2.quantum_balatro_original.quantum_backend import QuantumBackend 
 
 router = APIRouter()
 games_instances: dict[str, Any] = {}
+
+CIRCUIT_ROULETTE_ITEMS = [
+    {"name": "SAFE", "color": "green", "message": "Waveform Stable"},
+    {"name": "-1 HAND", "color": "red", "message": "Time Dilation"},
+    {"name": "RESET MULT", "color": "magenta", "message": "Multiplier Collapsed"},
+    {"name": "-200 CHIPS", "color": "gold", "message": "Energy Leak"},
+]
+
+CIRCUIT_JOKERS = [
+    {
+        "id": "TOPOLOGY",
+        "name": "Shield",
+        "desc": "Boss line limit +1",
+        "cost": 4,
+        "color": "cyan",
+    },
+    {
+        "id": "ENTANGLE",
+        "name": "Spark",
+        "desc": "+100 chips when CNOT is used",
+        "cost": 5,
+        "color": "red",
+    },
+    {
+        "id": "PHASE",
+        "name": "Phase",
+        "desc": "Z gates grant x1.5 multiplier",
+        "cost": 6,
+        "color": "gold",
+    },
+]
 
 
 class GatePlacement(BaseModel):
@@ -56,8 +88,13 @@ class CircuitGameSession:
         self.last_mult = 1.0
         self.phase = "PLAYING"
         self.warning = ""
+        self.last_roulette: dict[str, str] | None = None
+        self.last_roulette_chances: dict[str, int] | None = None
+        self.shop_jokers: list[dict[str, Any]] = []
+        self.owned_jokers: list[dict[str, Any]] = []
         self.gates: list[GatePlacement] = []
         self.active_jokers: list[str] = []
+        self.observe_count = 0
 
     def gate_sequence(self) -> list[tuple[str, int]]:
         ordered = sorted(self.gates, key=lambda item: (item.slot, item.qubit))
@@ -91,16 +128,36 @@ class CircuitGameSession:
             "score": self.score,
             "money": self.money,
             "stored_mult": round(self.stored_mult, 2),
+            "observe_count": self.observe_count,
             "last_chips": self.last_chips,
             "last_mult": round(self.last_mult, 2),
             "warning": self.warning,
+            "roulette_items": CIRCUIT_ROULETTE_ITEMS,
+            "roulette_chances": self.last_roulette_chances or self.roulette_chances(),
+            "last_roulette": self.last_roulette,
+            "shop_jokers": self.shop_jokers,
+            "owned_jokers": self.owned_jokers,
+            "active_jokers": self.active_jokers,
             "gates": [item.model_dump() for item in self.gates],
             "probabilities": probs,
             "preview": {
                 "chips": chips,
                 "mult": mult,
                 "total": int(chips * mult * self.stored_mult),
+                "match_chips": chips,
+                "gate_mult": mult,
+                "stored_mult": round(self.stored_mult, 2),
             },
+        }
+
+    def roulette_chances(self) -> dict[str, int]:
+        risk = min(45, int(max(0, self.stored_mult - 1) * 5) + self.observe_count * 10)
+        safe = max(25, 70 - risk)
+        return {
+            "SAFE": safe,
+            "-1 HAND": 10 + risk // 3,
+            "RESET MULT": 10 + risk // 3,
+            "-200 CHIPS": 10 + risk - (risk // 3) * 2,
         }
 
     def set_gates(self, gates: list[GatePlacement]) -> None:
@@ -141,7 +198,28 @@ class CircuitGameSession:
             self.active_jokers,
         )
         self.stored_mult *= mult
+        self.observe_count += 1
         self.clear()
+        chances = self.roulette_chances()
+        self.last_roulette_chances = chances
+        self.last_roulette = random.choices(
+            CIRCUIT_ROULETTE_ITEMS,
+            weights=[chances[item["name"]] for item in CIRCUIT_ROULETTE_ITEMS],
+            k=1,
+        )[0]
+        if self.last_roulette["name"] == "-1 HAND":
+            self.hands_left -= 1
+        elif self.last_roulette["name"] == "RESET MULT":
+            self.stored_mult = 1.0
+        elif self.last_roulette["name"] == "-200 CHIPS":
+            self.score = max(0, self.score - 200)
+        self.phase = "ROULETTE"
+
+    def complete_roulette(self) -> None:
+        if self.phase != "ROULETTE":
+            return
+        self.phase = "GAME_OVER" if self.hands_left <= 0 else "PLAYING"
+        self.last_roulette_chances = None
 
     def play(self) -> None:
         if self.phase != "PLAYING":
@@ -172,20 +250,58 @@ class CircuitGameSession:
         if self.score >= self.level()["target"]:
             reward = self.level().get("reward", 4)
             self.money += reward + max(self.hands_left, 0)
-            self.phase = "WIN" if self.level_idx == len(LEVELS) - 1 else "NEXT_BLIND"
+            if self.level_idx == len(LEVELS) - 1:
+                self.phase = "WIN"
+            else:
+                self.phase = "SHOP"
+                self.generate_shop()
         elif self.hands_left <= 0:
             self.phase = "GAME_OVER"
 
+    def generate_shop(self) -> None:
+        owned_ids = {joker["id"] for joker in self.owned_jokers}
+        pool = [joker for joker in CIRCUIT_JOKERS if joker["id"] not in owned_ids]
+        self.shop_jokers = random.sample(pool, min(2, len(pool)))
+
+    def buy_joker(self, joker_id: str) -> None:
+        if self.phase != "SHOP":
+            raise HTTPException(status_code=400, detail="Jokers can only be bought in the shop")
+        for index, joker in enumerate(self.shop_jokers):
+            if joker["id"] != joker_id:
+                continue
+            if self.money < joker["cost"]:
+                raise HTTPException(status_code=400, detail="Not enough funds")
+            if len(self.owned_jokers) >= 2:
+                raise HTTPException(status_code=400, detail="Max jokers reached")
+            self.money -= joker["cost"]
+            self.owned_jokers.append(joker)
+            self.active_jokers.append(joker["id"])
+            self.shop_jokers.pop(index)
+            return
+        raise HTTPException(status_code=404, detail="Shop joker not found")
+
+    def toggle_joker(self, joker_id: str) -> None:
+        if joker_id not in {joker["id"] for joker in self.owned_jokers}:
+            raise HTTPException(status_code=404, detail="Owned joker not found")
+        if joker_id in self.active_jokers:
+            self.active_jokers.remove(joker_id)
+        else:
+            self.active_jokers.append(joker_id)
+
     def next_level(self) -> None:
-        if self.phase != "NEXT_BLIND":
+        if self.phase != "SHOP":
             return
         self.level_idx += 1
         self.hands_left = 4
         self.score = 0
         self.stored_mult = 1.0
+        self.observe_count = 0
         self.last_chips = 0
         self.last_mult = 1.0
         self.phase = "PLAYING"
+        self.last_roulette = None
+        self.last_roulette_chances = None
+        self.shop_jokers = []
         self.clear()
 
 
@@ -255,6 +371,19 @@ def get_game_state() -> dict[str, Any]:
         "last_hand_played": getattr(game, "last_hand_played", "None"),
         "last_fidelity": getattr(game, "last_fidelity", 0.0),
         "last_payout": getattr(game, "last_payout", {"base": 0, "plays": 0, "total": 0}),
+        "last_score_breakdown": getattr(
+            game,
+            "last_score_breakdown",
+            {
+                "hand": "None",
+                "base_chips": 0,
+                "base_mult": 0,
+                "fidelity": 0.0,
+                "joker_chips_delta": 0,
+                "joker_mult_delta": 0,
+                "score": 0,
+            },
+        ),
         "hand_cards": [
             {
                 "id": index,
@@ -339,6 +468,13 @@ def observe_circuit() -> dict[str, Any]:
     return session.serialize()
 
 
+@router.post("/circuit/roulette/continue")
+def continue_circuit_roulette() -> dict[str, Any]:
+    session = active_circuit_session()
+    session.complete_roulette()
+    return session.serialize()
+
+
 @router.post("/circuit/play")
 def play_circuit() -> dict[str, Any]:
     session = active_circuit_session()
@@ -350,6 +486,20 @@ def play_circuit() -> dict[str, Any]:
 def next_circuit_level() -> dict[str, Any]:
     session = active_circuit_session()
     session.next_level()
+    return session.serialize()
+
+
+@router.post("/circuit/shop/buy/{joker_id}")
+def buy_circuit_joker(joker_id: str) -> dict[str, Any]:
+    session = active_circuit_session()
+    session.buy_joker(joker_id)
+    return session.serialize()
+
+
+@router.post("/circuit/jokers/toggle/{joker_id}")
+def toggle_circuit_joker(joker_id: str) -> dict[str, Any]:
+    session = active_circuit_session()
+    session.toggle_joker(joker_id)
     return session.serialize()
 
 

@@ -1,4 +1,6 @@
 import random
+from qiskit import QuantumCircuit
+from qiskit.quantum_info import Statevector
 
 # ==========================================
 # 1. 实体定义：卡牌系统 (Cards)
@@ -85,6 +87,15 @@ class GameState:
         self.shop_jokers = []  
         self.shop_pack = False 
         self.last_payout = {'base': 0, 'plays': 0, 'total': 0}
+        self.last_score_breakdown = {
+            'hand': 'None',
+            'base_chips': 0,
+            'base_mult': 0,
+            'fidelity': 0.0,
+            'joker_chips_delta': 0,
+            'joker_mult_delta': 0,
+            'score': 0
+        }
         
         # --- 当前游玩状态 ---
         self.max_plays = 4
@@ -154,6 +165,15 @@ class GameState:
         self.current_score = 0
         self.last_hand_played = "None"
         self.last_fidelity = 0.0
+        self.last_score_breakdown = {
+            'hand': 'None',
+            'base_chips': 0,
+            'base_mult': 0,
+            'fidelity': 0.0,
+            'joker_chips_delta': 0,
+            'joker_mult_delta': 0,
+            'score': 0
+        }
         
         base = 300
         multiplier = 1.5 ** (self.ante - 1)
@@ -185,6 +205,7 @@ class GameState:
         elif len(gate_types) >= 3 and 'X' in gate_types: h_name = "W State (三条)"
         else: h_name = "High Qubit (高牌)"
             
+        h_name = self._classify_hand(gate_types)
         self.preview_hand_name = h_name
         base_chips = self.poker_hands[h_name]["chips"]
         base_mult = self.poker_hands[h_name]["mult"]
@@ -192,9 +213,60 @@ class GameState:
         for joker in self.jokers:
             base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
             
-        fidelity = 1.0 if not self.backend else 0.85 
+        target_state = self._target_state_for_hand(h_name)
+        fidelity = 1.0
+        if self.backend and target_state is not None:
+            fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
+            if abs(1.0 - fidelity) < 1e-9:
+                fidelity = 1.0
         self.preview_fidelity = fidelity
         self.preview_score = int((base_chips * base_mult) * fidelity)
+
+    def _hand_key(self, prefix):
+        return next(key for key in self.poker_hands if key.startswith(prefix))
+
+    def _classify_hand(self, gate_types):
+        if len(gate_types) >= 3 and 'CNOT' in gate_types and 'H' in gate_types:
+            return self._hand_key("GHZ State")
+        if len(gate_types) >= 2 and 'CNOT' in gate_types:
+            return self._hand_key("Bell Pair")
+        if all(g == 'H' for g in gate_types) and len(gate_types) > 1:
+            return self._hand_key("Flush")
+        if 'X' in gate_types and 'H' in gate_types:
+            return self._hand_key("Full House")
+        if len(gate_types) >= 3 and 'X' in gate_types:
+            return self._hand_key("W State")
+        return self._hand_key("High Qubit")
+
+    def _target_state_for_hand(self, hand_name):
+        if self.num_qubits <= 0:
+            return None
+
+        if hand_name.startswith("W State") and self.num_qubits >= 3:
+            amplitudes = [0.0] * (2 ** self.num_qubits)
+            for qubit in range(3):
+                amplitudes[1 << qubit] = 1 / (3 ** 0.5)
+            return Statevector(amplitudes)
+
+        qc = QuantumCircuit(self.num_qubits)
+        if hand_name.startswith("GHZ State"):
+            qc.h(0)
+            for qubit in range(1, self.num_qubits):
+                qc.cx(0, qubit)
+        elif hand_name.startswith("Bell Pair") and self.num_qubits >= 2:
+            qc.h(0)
+            qc.cx(0, 1)
+        elif hand_name.startswith("Flush"):
+            for qubit in range(self.num_qubits):
+                qc.h(qubit)
+        elif hand_name.startswith("Full House") and self.num_qubits >= 2:
+            qc.h(0)
+            qc.x(1)
+        elif hand_name.startswith("High Qubit"):
+            pass
+        else:
+            return None
+        return Statevector.from_instruction(qc)
 
     def play_hand(self, selected_card_indices, target_qubits_list, theta_list=None):
         """升级版：支持多卡牌插槽同时出牌的安全逻辑"""
@@ -251,20 +323,37 @@ class GameState:
         else:
             hand_name = "High Qubit (高牌)"
             
+        hand_name = self._classify_hand(played_gate_types)
         self.last_hand_played = hand_name
         base_chips = self.poker_hands[hand_name]["chips"]
         base_mult = self.poker_hands[hand_name]["mult"]
+        original_chips = base_chips
+        original_mult = base_mult
         
         # 小丑牌算分
         for joker in self.jokers:
             base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
             
-        fidelity = 1.0 if not self.backend else 0.85 
+        target_state = self._target_state_for_hand(hand_name)
+        fidelity = 1.0
+        if self.backend and target_state is not None:
+            fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
+            if abs(1.0 - fidelity) < 1e-9:
+                fidelity = 1.0
 
         # 【新增】：把这次出牌的保真度保存到状态机里，供前端读取
         self.last_fidelity = fidelity
 
         hand_score = int((base_chips * base_mult) * fidelity)
+        self.last_score_breakdown = {
+            'hand': hand_name,
+            'base_chips': original_chips,
+            'base_mult': original_mult,
+            'fidelity': round(fidelity, 3),
+            'joker_chips_delta': base_chips - original_chips,
+            'joker_mult_delta': base_mult - original_mult,
+            'score': hand_score
+        }
         self.current_score += hand_score
         
         self.draw_cards(len(selected_card_indices))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./GamePage.css";
 
 const API_BASE = "http://127.0.0.1:8000/api/quantum-game";
@@ -86,6 +86,7 @@ function GameLobby({ gamesList, onStart }) {
 
 function CircuitGame({ state, onRefresh, onExit }) {
   const [selectedGate, setSelectedGate] = useState("H");
+  const [showRules, setShowRules] = useState(false);
   const gatesBySlot = useMemo(() => {
     const map = new Map();
     state.gates.forEach((gate) => map.set(`${gate.qubit}_${gate.slot}`, gate));
@@ -142,13 +143,26 @@ function CircuitGame({ state, onRefresh, onExit }) {
     await onRefresh();
   };
 
+  if (showRules) {
+    return <CircuitRulesPage onBack={() => setShowRules(false)} onExit={onExit} />;
+  }
+
+  if (state.phase === "ROULETTE") {
+    return <CircuitRoulette state={state} onAction={action} onExit={onExit} onRules={() => setShowRules(true)} />;
+  }
+
+  if (state.phase === "SHOP") {
+    return <CircuitShop state={state} onAction={action} onExit={onExit} onRules={() => setShowRules(true)} />;
+  }
+
   return (
     <main className="board-screen">
-      <TopBar onExit={onExit} />
+      <TopBar onExit={onExit} onRules={() => setShowRules(true)} />
       <header className="hud">
         <div>
           <h2>Quantum Hacker</h2>
           <p>{state.level.desc}</p>
+          <ProgressMeter current={state.score} target={state.level.target} />
         </div>
         <div className="stats">
           <span>Blind {state.level_index + 1}/{state.level_count}</span>
@@ -207,6 +221,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
             <span>Preview</span>
             <strong>{state.preview.chips} x {state.preview.mult} = {state.preview.total}</strong>
           </div>
+          <CircuitScoreBreakdown state={state} />
           {state.stored_mult > 1 && <div className="notice">Stored multiplier x{state.stored_mult}</div>}
           {state.warning && <div className="warning">{state.warning}</div>}
           <button className="btn btn-observe" onClick={() => action("/circuit/observe")}>Observe</button>
@@ -218,13 +233,128 @@ function CircuitGame({ state, onRefresh, onExit }) {
       {state.phase !== "PLAYING" && (
         <div className="game-overlay">
           <h2>{state.phase === "GAME_OVER" ? "Wave Collapsed" : state.phase === "WIN" ? "Run Won" : "Blind Defeated"}</h2>
-          {state.phase === "NEXT_BLIND" ? (
-            <button className="btn btn-play-hand" onClick={() => action("/circuit/next")}>Next Blind</button>
-          ) : (
-            <button className="btn btn-play-hand" onClick={() => action("/start/game1")}>Restart</button>
-          )}
+          <button className="btn btn-play-hand" onClick={() => action("/start/game1")}>Restart</button>
         </div>
       )}
+    </main>
+  );
+}
+
+function CircuitRoulette({ state, onAction, onExit, onRules }) {
+  const hitIndex = Math.max(
+    0,
+    state.roulette_items.findIndex((item) => item.name === state.last_roulette?.name),
+  );
+  const segmentCenter = hitIndex * 90 + 45;
+  const rotation = 360 * 4 - segmentCenter;
+
+  return (
+    <main className="board-screen roulette-screen">
+      <TopBar onExit={onExit} onRules={onRules} />
+      <header className="hud">
+        <div>
+          <h2>Wave Collapse Roulette</h2>
+          <p>Observation stored the multiplier, then collapsed the circuit into a random event.</p>
+        </div>
+        <div className="stats">
+          <span>Score {state.score} / {state.level.target}</span>
+          <span>Hands {state.hands_left}</span>
+          <span>Stored x{state.stored_mult}</span>
+        </div>
+      </header>
+
+      <section className="roulette-stage">
+        <div className="roulette-pointer" />
+        <div
+          key={state.last_roulette?.name}
+          className="roulette-wheel spinning"
+          style={{ "--spin": `${rotation}deg` }}
+        >
+          {state.roulette_items.map((item, index) => (
+            <span key={item.name} className={`roulette-label roulette-label-${index}`}>
+              {item.name}
+            </span>
+          ))}
+        </div>
+        <div className={`roulette-result result-${state.last_roulette?.color || "green"}`}>
+          <strong>{state.last_roulette?.name}</strong>
+          <span>{state.last_roulette?.message}</span>
+        </div>
+        <RouletteChances chances={state.roulette_chances} />
+        <button className="btn btn-play-hand" onClick={() => onAction("/circuit/roulette/continue")}>
+          Continue
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function CircuitShop({ state, onAction, onExit, onRules }) {
+  return (
+    <main className="board-screen">
+      <TopBar onExit={onExit} onRules={onRules} />
+      <header className="hud">
+        <div>
+          <h2>Quantum Hacker Shop</h2>
+          <p>Buy up to two jokers. Active jokers change circuit scoring and boss constraints.</p>
+        </div>
+        <div className="stats">
+          <span>Funds ${state.money}</span>
+          <span>Blind {state.level_index + 1}/{state.level_count}</span>
+          <span>Jokers {state.owned_jokers.length}/2</span>
+        </div>
+      </header>
+
+      <section className="shop-layout">
+        <div className="shop-shelf">
+          <h3>Jokers</h3>
+          <div className="shop-items">
+            {state.shop_jokers.length ? (
+              state.shop_jokers.map((joker) => (
+                <article key={joker.id} className={`shop-card joker-${joker.color}`}>
+                  <span className="shop-type">JOKER</span>
+                  <h4>{joker.name}</h4>
+                  <p>{joker.desc}</p>
+                  <strong>${joker.cost}</strong>
+                  <button
+                    className="btn btn-play-hand"
+                    onClick={() => onAction(`/circuit/shop/buy/${joker.id}`)}
+                    disabled={state.money < joker.cost || state.owned_jokers.length >= 2}
+                  >
+                    Buy Joker
+                  </button>
+                </article>
+              ))
+            ) : (
+              <p className="empty-hand-note">No jokers left in this shop.</p>
+            )}
+          </div>
+        </div>
+
+        <aside className="shop-side">
+          <h3>Owned Jokers</h3>
+          {state.owned_jokers.length ? (
+            state.owned_jokers.map((joker) => {
+              const active = state.active_jokers.includes(joker.id);
+              return (
+                <button
+                  key={joker.id}
+                  className={`owned-joker owned-joker-button ${active ? "active" : ""}`}
+                  onClick={() => onAction(`/circuit/jokers/toggle/${joker.id}`)}
+                >
+                  <strong>{joker.name}</strong>
+                  <span>{active ? "Active" : "Inactive"} - {joker.desc}</span>
+                </button>
+              );
+            })
+          ) : (
+            <p className="empty-hand-note">No owned jokers yet.</p>
+          )}
+          <button className="btn btn-play-hand" onClick={() => onAction("/circuit/next")}>
+            Next Blind
+          </button>
+        </aside>
+      </section>
     </main>
   );
 }
@@ -233,6 +363,7 @@ function CardGame({ state, onRefresh, onExit }) {
   const [selectedCardIds, setSelectedCardIds] = useState([]);
   const [stagedCards, setStagedCards] = useState({});
   const [draggingCardId, setDraggingCardId] = useState(null);
+  const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
     setSelectedCardIds([]);
@@ -303,21 +434,26 @@ function CardGame({ state, onRefresh, onExit }) {
     await onRefresh();
   };
 
+  if (showRules) {
+    return <CardRulesPage onBack={() => setShowRules(false)} onExit={onExit} />;
+  }
+
   if (state.phase === "SHOP") {
-    return <CardShop state={state} onAction={action} onExit={onExit} />;
+    return <CardShop state={state} onAction={action} onExit={onExit} onRules={() => setShowRules(true)} />;
   }
 
   if (state.phase === "OPENING_PACK") {
-    return <PackOpening state={state} onAction={action} onExit={onExit} />;
+    return <PackOpening state={state} onAction={action} onExit={onExit} onRules={() => setShowRules(true)} />;
   }
 
   return (
     <main className="board-screen">
-      <TopBar onExit={onExit} />
+      <TopBar onExit={onExit} onRules={() => setShowRules(true)} />
       <header className="hud">
         <div>
           <h2>Quantum Balatro Original</h2>
           <p>Build a hand by placing gate cards into qubit slots.</p>
+          <ProgressMeter current={state.current_score} target={state.target_score} />
         </div>
         <div className="stats">
           <span>Chips ${state.chips}</span>
@@ -374,6 +510,7 @@ function CardGame({ state, onRefresh, onExit }) {
             <span>Last hand</span>
             <strong>{state.last_hand_played}</strong>
           </div>
+          <CardScoreBreakdown breakdown={state.last_score_breakdown} />
           <button className="btn btn-play-hand" onClick={playHand} disabled={!Object.keys(visibleStagedCards).length}>
             Play Hand
           </button>
@@ -444,10 +581,10 @@ function CardGame({ state, onRefresh, onExit }) {
   );
 }
 
-function CardShop({ state, onAction, onExit }) {
+function CardShop({ state, onAction, onExit, onRules }) {
   return (
     <main className="board-screen">
-      <TopBar onExit={onExit} />
+      <TopBar onExit={onExit} onRules={onRules} />
       <header className="hud">
         <div>
           <h2>Quantum Shop</h2>
@@ -526,25 +663,66 @@ function CardShop({ state, onAction, onExit }) {
   );
 }
 
-function PackOpening({ state, onAction, onExit }) {
+function PackOpening({ state, onAction, onExit, onRules }) {
   const card = state.opened_card;
+  const [revealStep, setRevealStep] = useState("sealed");
+  const revealTimer = useRef(null);
+
+  useEffect(() => {
+    setRevealStep("sealed");
+    if (revealTimer.current) {
+      window.clearTimeout(revealTimer.current);
+      revealTimer.current = null;
+    }
+    return () => {
+      if (revealTimer.current) {
+        window.clearTimeout(revealTimer.current);
+      }
+    };
+  }, [card?.name, card?.gate]);
+
+  const openPack = () => {
+    setRevealStep("opening");
+    revealTimer.current = window.setTimeout(() => setRevealStep("revealed"), 1450);
+  };
+
   return (
     <main className="board-screen pack-screen">
-      <TopBar onExit={onExit} />
+      <TopBar onExit={onExit} onRules={onRules} />
       <section className="pack-stage">
         <h2>Quantum Pack</h2>
-        {card ? (
-          <article className={`q-card pack-reveal rarity-${card.rarity}`}>
-            <strong>{card.gate}</strong>
-            <span>{card.name}</span>
-            <small>Uses: {card.durability}</small>
-          </article>
+        <div className={`pack-opening ${revealStep}`}>
+          <div className="pack-shell" aria-hidden={revealStep === "revealed"}>
+            <div className="pack-core">
+              <span>QUANTUM</span>
+              <strong>PACK</strong>
+              <small>RX PHASE SERIES</small>
+            </div>
+            <div className="pack-rip pack-rip-left" />
+            <div className="pack-rip pack-rip-right" />
+            <div className="pack-glow" />
+          </div>
+          {card && (
+            <article className={`q-card pack-reveal rarity-${card.rarity}`} aria-hidden={revealStep !== "revealed"}>
+              <strong>{card.gate}</strong>
+              <span>{card.name}</span>
+              <small>Uses: {card.durability}</small>
+            </article>
+          )}
+        </div>
+        {revealStep === "sealed" ? (
+          <button className="btn btn-observe" onClick={openPack} disabled={!card}>
+            Open Pack
+          </button>
+        ) : revealStep === "opening" ? (
+          <button className="btn btn-clear" disabled>
+            Opening...
+          </button>
         ) : (
-          <div className="shop-card pack-reveal">Opening...</div>
+          <button className="btn btn-play-hand" onClick={() => onAction("/cards/collect-pack")}>
+            Collect Card
+          </button>
         )}
-        <button className="btn btn-play-hand" onClick={() => onAction("/cards/collect-pack")}>
-          Collect Card
-        </button>
       </section>
     </main>
   );
@@ -574,10 +752,186 @@ function ProbabilityChart({ probabilities, targets }) {
   );
 }
 
-function TopBar({ onExit }) {
+function CircuitScoreBreakdown({ state }) {
+  const chances = state.roulette_chances || {};
+  return (
+    <div className="score-breakdown">
+      <h3>Score Breakdown</h3>
+      <div className="score-line">
+        <span>Target match</span>
+        <strong>{state.preview.match_chips}</strong>
+      </div>
+      <div className="score-line">
+        <span>Gate multiplier</span>
+        <strong>x{state.preview.gate_mult}</strong>
+      </div>
+      <div className="score-line">
+        <span>Stored multiplier</span>
+        <strong>x{state.preview.stored_mult}</strong>
+      </div>
+      <div className="score-line">
+        <span>Observe risk</span>
+        <strong>{state.observe_count} used</strong>
+      </div>
+      <div className="chance-grid">
+        {Object.entries(chances).map(([name, chance]) => (
+          <span key={name}>{name}: {chance}%</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CardScoreBreakdown({ breakdown }) {
+  if (!breakdown || breakdown.hand === "None") {
+    return (
+      <div className="score-breakdown">
+        <h3>Last Score</h3>
+        <p className="empty-hand-note">Play a staged circuit to measure fidelity.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="score-breakdown">
+      <h3>Last Score</h3>
+      <div className="score-line">
+        <span>Base</span>
+        <strong>{breakdown.base_chips} x {breakdown.base_mult}</strong>
+      </div>
+      <div className="score-line">
+        <span>Jokers</span>
+        <strong>+{breakdown.joker_chips_delta} chips / +{breakdown.joker_mult_delta} mult</strong>
+      </div>
+      <div className="score-line">
+        <span>Fidelity</span>
+        <strong>{Math.round((breakdown.fidelity || 0) * 100)}%</strong>
+      </div>
+      <div className="score-line total">
+        <span>Total</span>
+        <strong>{breakdown.score}</strong>
+      </div>
+    </div>
+  );
+}
+
+function RouletteChances({ chances = {} }) {
+  return (
+    <div className="roulette-chances">
+      {Object.entries(chances).map(([name, chance]) => (
+        <span key={name}>{name}: {chance}%</span>
+      ))}
+    </div>
+  );
+}
+
+function ProgressMeter({ current, target }) {
+  const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+  return (
+    <div className="progress-meter" aria-label={`Progress ${pct}%`}>
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span>{pct}%</span>
+    </div>
+  );
+}
+
+function CircuitRulesPage({ onBack, onExit }) {
+  return (
+    <main className="board-screen">
+      <TopBar onExit={onExit} />
+      <section className="rules-page">
+        <div className="rules-header">
+          <div>
+            <span className="game-badge static">circuit</span>
+            <h2>Quantum Hacker Rules</h2>
+            <p>Build a two-qubit circuit, match the target distribution, and decide when to lock in riskier multipliers.</p>
+          </div>
+          <button className="btn btn-play-hand" onClick={onBack}>Back to Game</button>
+        </div>
+
+        <div className="rules-grid">
+          <article className="rule-card">
+            <h3>Goal</h3>
+            <p>Each blind gives a target probability distribution. Your circuit produces probabilities for 00, 01, 10, and 11. Better overlap creates more base chips.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Gates</h3>
+            <p>H creates superposition and multiplies score. X flips a qubit. Z can become a multiplier with the Phase joker. CNOT entangles one qubit with the other.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Play Hand</h3>
+            <p>Play Hand scores the current circuit, consumes one hand, clears the board, and resets stored multiplier back to x1.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Observe</h3>
+            <p>Observe stores the current gate multiplier without spending a hand, then clears the circuit and spins roulette. More Observe uses and higher stored multiplier increase risk.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Roulette</h3>
+            <p>SAFE has no penalty. Other outcomes can remove one hand, reset stored multiplier, or remove score. The visible odds are the odds used for that spin.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Shop</h3>
+            <p>After clearing a blind, buy up to two jokers. Active jokers change scoring or boss constraints, and can be toggled in the shop.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function CardRulesPage({ onBack, onExit }) {
+  return (
+    <main className="board-screen">
+      <TopBar onExit={onExit} />
+      <section className="rules-page">
+        <div className="rules-header">
+          <div>
+            <span className="game-badge static">cards</span>
+            <h2>Quantum Balatro Original Rules</h2>
+            <p>Stage gate cards into qubit slots, make a quantum poker hand, and score through both hand type and state fidelity.</p>
+          </div>
+          <button className="btn btn-play-hand" onClick={onBack}>Back to Game</button>
+        </div>
+
+        <div className="rules-grid">
+          <article className="rule-card">
+            <h3>Goal</h3>
+            <p>Reach the blind target before plays run out. Clearing a blind pays chips based on blind size and unused plays.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Staging</h3>
+            <p>Drag cards into the circuit. Slots determine the order cards are played, and the row determines the target qubit. CNOT uses the next qubit when needed.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Hand Types</h3>
+            <p>Gate combinations create hands such as Bell Pair, Flush, Full House, W State, and GHZ State. Stronger hands have higher base chips and multiplier.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Fidelity</h3>
+            <p>Your circuit is compared against the target quantum state for the detected hand. Higher fidelity preserves more of the base score.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Discards</h3>
+            <p>Select hand cards and discard them to draw replacements. Discards are limited per blind, so use them to search for missing gate combinations.</p>
+          </article>
+          <article className="rule-card">
+            <h3>Shop</h3>
+            <p>Spend chips on jokers or packs. Jokers alter scoring, while packs add new quantum cards such as RX phase cards to your deck.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function TopBar({ onExit, onRules }) {
   return (
     <div className="top-controls">
       <button className="btn-back" onClick={onExit}>Back to Game Lobby</button>
+      {onRules && <button className="btn-back" onClick={onRules}>Rules</button>}
     </div>
   );
 }
