@@ -1,3 +1,4 @@
+import math
 import random
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector
@@ -6,12 +7,14 @@ from qiskit.quantum_info import Statevector
 # 1. 实体定义：卡牌系统 (Cards)
 # ==========================================
 class Card:
-    def __init__(self, name, gate_type, rarity='blue'):
+    def __init__(self, name, gate_type, rarity='blue', lesson='', target_count=None):
         self.name = name
         self.gate_type = gate_type 
         self.rarity = rarity       
         self.durability = 3 if rarity == 'purple' else -1
         self.is_broken = False
+        self.lesson = lesson
+        self.target_count = target_count if target_count is not None else (2 if gate_type in ['CNOT', 'CX', 'CZ', 'SWAP'] else 1)
         # --- 新增属性 ---
         self.is_new = False  # 标记是否为刚买的新卡
         
@@ -62,6 +65,31 @@ class SchrodingerCatJoker(Joker):
         bonus_mult = state.plays_left * 5
         return current_chips, current_mult + bonus_mult
 
+class PhaseKickbackJoker(Joker):
+    def __init__(self):
+        super().__init__("Phase Kickback", "Z/CZ/RZ cards add +12 mult during scoring")
+
+    def on_calculate_score(self, current_chips, current_mult, state):
+        phase_count = sum(1 for gate in getattr(state, "last_played_gate_types", []) if gate in ['Z', 'CZ', 'RZ'])
+        return current_chips, current_mult + phase_count * 12
+
+class RotationCompilerJoker(Joker):
+    def __init__(self):
+        super().__init__("Rotation Compiler", "RX/RY/RZ cards add +25 chips")
+
+    def on_calculate_score(self, current_chips, current_mult, state):
+        rotation_count = sum(1 for gate in getattr(state, "last_played_gate_types", []) if gate in ['RX', 'RY', 'RZ'])
+        return current_chips + rotation_count * 25, current_mult
+
+class TopologyBonusJoker(Joker):
+    def __init__(self):
+        super().__init__("Topology Bonus", "SWAP/CZ/CCX hands gain x2 mult")
+
+    def on_calculate_score(self, current_chips, current_mult, state):
+        if any(gate in ['SWAP', 'CZ', 'CCX'] for gate in getattr(state, "last_played_gate_types", [])):
+            return current_chips, current_mult * 2
+        return current_chips, current_mult
+
 # ==========================================
 # 3. 核心中枢：游戏状态机 (GameState)
 # ==========================================
@@ -108,6 +136,7 @@ class GameState:
         self.preview_hand_name = "None"
         self.preview_score = 0
         self.preview_fidelity = 0.0
+        self.last_played_gate_types = []
         
         # --- 量子牌型定义 (Base Chips x Base Mult) ---
         self.poker_hands = {
@@ -118,9 +147,31 @@ class GameState:
             "Bell Pair (纠缠对)": {"chips": 30, "mult": 3},
             "High Qubit (高牌)": {"chips": 10, "mult": 2}
         }
+        self.poker_hands.update({
+            "Toffoli Cascade": {"chips": 180, "mult": 16},
+            "Swap Network": {"chips": 150, "mult": 13},
+            "Phase Lock": {"chips": 105, "mult": 10},
+            "Rotation Trio": {"chips": 80, "mult": 7},
+        })
+        self.hand_catalog = [
+            {"name": name, "chips": stats["chips"], "mult": stats["mult"]}
+            for name, stats in self.poker_hands.items()
+        ]
+        self.pack_catalog = [
+            {"type": "phase", "name": "Phase Pack", "desc": "Adds Z/CZ/RZ cards for phase-interference hands."},
+            {"type": "rotation", "name": "Rotation Pack", "desc": "Adds RX/RY/RZ cards that teach continuous rotations."},
+            {"type": "entangle", "name": "Entangle Pack", "desc": "Adds CNOT/CZ/SWAP cards for explicit two-qubit targeting."},
+            {"type": "control", "name": "Control Pack", "desc": "Adds a rare CCX card for late-game control logic."},
+        ]
+        self.current_lesson = {
+            "title": "Stage a quantum poker hand",
+            "body": "Drag cards into time slots. Controlled gates use the source row plus the selected target row, so CNOT direction matters.",
+        }
         self.last_hand_played = "None"
         
         self.start_new_blind()
+        # 新手教程标记：第一次进入游戏时展示
+        self.seen_tutorial = False
 
     def _init_deck(self):
         deck = []
@@ -129,6 +180,9 @@ class GameState:
             deck.append(Card("泡利X门 (X)", "X", "normal"))
         deck.append(Card("受控非门 (CNOT)", "CNOT", "normal"))
         deck.append(Card("粗糙的相位门", "RX", "blue")) 
+        for _ in range(2):
+            deck.append(Card("Pauli-Z Gate (Z)", "Z", "normal", "Changes phase without changing measurement probability."))
+        deck.append(Card("Controlled-Z (CZ)", "CZ", "blue", "Adds a conditional phase between two selected qubits.", 2))
         random.shuffle(deck)
         return deck
 
@@ -165,6 +219,7 @@ class GameState:
         self.current_score = 0
         self.last_hand_played = "None"
         self.last_fidelity = 0.0
+        self.last_played_gate_types = []
         self.last_score_breakdown = {
             'hand': 'None',
             'base_chips': 0,
@@ -226,10 +281,18 @@ class GameState:
         return next(key for key in self.poker_hands if key.startswith(prefix))
 
     def _classify_hand(self, gate_types):
+        if 'CCX' in gate_types:
+            return self._hand_key("Toffoli Cascade")
+        if 'SWAP' in gate_types and any(g in gate_types for g in ['CNOT', 'CZ']):
+            return self._hand_key("Swap Network")
         if len(gate_types) >= 3 and 'CNOT' in gate_types and 'H' in gate_types:
             return self._hand_key("GHZ State")
+        if sum(1 for g in gate_types if g in ['Z', 'CZ', 'RZ']) >= 2:
+            return self._hand_key("Phase Lock")
         if len(gate_types) >= 2 and 'CNOT' in gate_types:
             return self._hand_key("Bell Pair")
+        if sum(1 for g in gate_types if g in ['RX', 'RY', 'RZ']) >= 2:
+            return self._hand_key("Rotation Trio")
         if all(g == 'H' for g in gate_types) and len(gate_types) > 1:
             return self._hand_key("Flush")
         if 'X' in gate_types and 'H' in gate_types:
@@ -249,13 +312,31 @@ class GameState:
             return Statevector(amplitudes)
 
         qc = QuantumCircuit(self.num_qubits)
-        if hand_name.startswith("GHZ State"):
+        if hand_name.startswith("Toffoli Cascade") and self.num_qubits >= 3:
+            qc.h(0)
+            qc.x(1)
+            qc.ccx(0, 1, 2)
+        elif hand_name.startswith("Swap Network") and self.num_qubits >= 2:
+            qc.h(0)
+            qc.swap(0, 1)
+            if self.num_qubits >= 3:
+                qc.cx(1, 2)
+        elif hand_name.startswith("GHZ State"):
             qc.h(0)
             for qubit in range(1, self.num_qubits):
                 qc.cx(0, qubit)
+        elif hand_name.startswith("Phase Lock") and self.num_qubits >= 2:
+            qc.h(0)
+            qc.cz(0, 1)
         elif hand_name.startswith("Bell Pair") and self.num_qubits >= 2:
             qc.h(0)
             qc.cx(0, 1)
+        elif hand_name.startswith("Rotation Trio"):
+            qc.rx(math.pi / 2, 0)
+            if self.num_qubits >= 2:
+                qc.ry(math.pi / 2, 1)
+            if self.num_qubits >= 3:
+                qc.rz(math.pi / 2, 2)
         elif hand_name.startswith("Flush"):
             for qubit in range(self.num_qubits):
                 qc.h(qubit)
@@ -273,92 +354,104 @@ class GameState:
         if self.phase != 'PLAYING' or self.plays_left <= 0 or not selected_card_indices:
             return False
 
-        # 将索引和目标比特绑定，然后按索引从大到小排序，防止 pop 时越界
-        paired = list(zip(selected_card_indices, target_qubits_list))
-        paired.sort(key=lambda x: x[0], reverse=True)
-        
-        played_cards = []
-        final_targets = []
-        for item in paired:
-            played_cards.append(self.hand.pop(item[0]))
-            final_targets.append(item[1])
-            
-        # 恢复成玩家放置的物理时间顺序（从左到右）
-        played_cards.reverse()
-        final_targets.reverse()
-        
-        # 记录打出了什么门
+        # 基本输入验证：索引合法、目标数与索引一一对应
+        if any((not isinstance(i, int) or i < 0 or i >= len(self.hand)) for i in selected_card_indices):
+            self.warning = "Invalid card indices"
+            return False
+        if len(selected_card_indices) != len(target_qubits_list):
+            self.warning = "Targets length mismatch"
+            return False
+
+        # 去重并按升序排列（保持从左到右的时间顺序）
+        unique_indices = sorted(dict.fromkeys(selected_card_indices))
+        played_cards = [self.hand[i] for i in unique_indices]
+        final_targets = [list(t) for t in target_qubits_list]
+
+        # 记录将要打出的 gate types（用于判定牌型）
         played_gate_types = []
 
-        for i, card in enumerate(played_cards):
-            if not card.use(self): continue 
-            played_gate_types.append(card.gate_type)
-            for joker in self.jokers: joker.on_play_gate(card.gate_type, self)
-            
-            # === 核心修复：自动补全双比特门的目标位 ===
-            curr_target = final_targets[i]
-            if card.gate_type in ['CNOT', 'SWAP'] and len(curr_target) < 2:
-                # 自动将目标位设定为下一根线 (利用取模运算 % 解决越界)
-                curr_target.append((curr_target[0] + 1) % self.num_qubits)
+        try:
+            for i, card in enumerate(played_cards):
+                # card.use 可能会修改 state（例如扣除 chips），但不会移除手牌——移除在成功后统一处理
+                ok = card.use(self)
+                if not ok:
+                    # 使用失败（例如费用不足） => 该卡被跳过
+                    continue
 
-            if self.backend:
-                theta = theta_list[i] if theta_list else None
-                self.backend.apply_gate(card.gate_type, curr_target, theta)
-                
-            if not getattr(card, 'is_broken', False): self.discard_pile.append(card)
+                played_gate_types.append(card.gate_type)
+                self.last_played_gate_types = played_gate_types[:]
+                for joker in self.jokers:
+                    joker.on_play_gate(card.gate_type, self)
 
-        self.plays_left -= 1
-        
-        # === 动态量子牌型判定 ===
-        if len(played_gate_types) >= 3 and 'CNOT' in played_gate_types and 'H' in played_gate_types:
-            hand_name = "GHZ State (同花顺)"
-        elif len(played_gate_types) >= 2 and 'CNOT' in played_gate_types:
-            hand_name = "Bell Pair (纠缠对)"
-        elif all(g == 'H' for g in played_gate_types) and len(played_gate_types) > 1:
-            hand_name = "Flush (均匀叠加)"
-        elif 'X' in played_gate_types and 'H' in played_gate_types:
-            hand_name = "Full House (满堂红)"
-        elif len(played_gate_types) >= 3 and 'X' in played_gate_types:
-            hand_name = "W State (三条)"
-        else:
-            hand_name = "High Qubit (高牌)"
-            
-        hand_name = self._classify_hand(played_gate_types)
-        self.last_hand_played = hand_name
-        base_chips = self.poker_hands[hand_name]["chips"]
-        base_mult = self.poker_hands[hand_name]["mult"]
-        original_chips = base_chips
-        original_mult = base_mult
-        
-        # 小丑牌算分
-        for joker in self.jokers:
-            base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
-            
-        target_state = self._target_state_for_hand(hand_name)
-        fidelity = 1.0
-        if self.backend and target_state is not None:
-            fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
-            if abs(1.0 - fidelity) < 1e-9:
-                fidelity = 1.0
+                # 自动补全双/三比特门的目标位
+                curr_target = final_targets[i]
+                if card.gate_type in ['CNOT', 'SWAP', 'CZ'] and len(curr_target) < 2:
+                    curr_target.append((curr_target[0] + 1) % self.num_qubits)
+                if card.gate_type in ['CCX'] and len(curr_target) < 3:
+                    curr_target.extend([
+                        (curr_target[0] + 1) % self.num_qubits,
+                        (curr_target[0] + 2) % self.num_qubits,
+                    ])
 
-        # 【新增】：把这次出牌的保真度保存到状态机里，供前端读取
-        self.last_fidelity = fidelity
+                if self.backend:
+                    theta = theta_list[i] if theta_list else (math.pi / 2 if card.gate_type in ['RX', 'RY', 'RZ'] else None)
+                    try:
+                        self.backend.apply_gate(card.gate_type, curr_target, theta)
+                    except Exception:
+                        # 如果底层模拟失败，记录警告并返回失败（不尝试复杂回滚）
+                        self.warning = f"Backend error applying {card.gate_type}"
+                        return False
 
-        hand_score = int((base_chips * base_mult) * fidelity)
-        self.last_score_breakdown = {
-            'hand': hand_name,
-            'base_chips': original_chips,
-            'base_mult': original_mult,
-            'fidelity': round(fidelity, 3),
-            'joker_chips_delta': base_chips - original_chips,
-            'joker_mult_delta': base_mult - original_mult,
-            'score': hand_score
-        }
-        self.current_score += hand_score
-        
-        self.draw_cards(len(selected_card_indices))
-        self.check_progression()
-        return True
+                if not getattr(card, 'is_broken', False):
+                    self.discard_pile.append(card)
+
+            # 移除已打出的手牌（按索引）
+            remaining = [c for idx, c in enumerate(self.hand) if idx not in unique_indices]
+            self.hand = remaining
+            self.plays_left -= 1
+
+            # 判定牌型并计分
+            hand_name = self._classify_hand(played_gate_types)
+            self.last_hand_played = hand_name
+            self.current_lesson = self._lesson_for_hand(hand_name, played_gate_types)
+
+            base_chips = self.poker_hands[hand_name]["chips"]
+            base_mult = self.poker_hands[hand_name]["mult"]
+            original_chips = base_chips
+            original_mult = base_mult
+
+            for joker in self.jokers:
+                base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
+
+            target_state = self._target_state_for_hand(hand_name)
+            fidelity = 1.0
+            if self.backend and target_state is not None:
+                fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
+                if abs(1.0 - fidelity) < 1e-9:
+                    fidelity = 1.0
+
+            self.last_fidelity = fidelity
+            hand_score = int((base_chips * base_mult) * fidelity)
+            self.last_score_breakdown = {
+                'hand': hand_name,
+                'base_chips': original_chips,
+                'base_mult': original_mult,
+                'fidelity': round(fidelity, 3),
+                'joker_chips_delta': base_chips - original_chips,
+                'joker_mult_delta': base_mult - original_mult,
+                'score': hand_score,
+            }
+            self.current_score += hand_score
+
+            # 补牌与进度检查
+            self.draw_cards(len(unique_indices))
+            self.check_progression()
+            return True
+
+        except Exception as e:
+            # 捕获非预期异常并提供提示
+            self.warning = f"Play failed: {str(e)}"
+            return False
 
     def discard_hand(self, selected_card_indices):
         if self.discards_left <= 0: return False
@@ -388,9 +481,55 @@ class GameState:
             self.phase = 'GAME_OVER'
 
     def generate_shop_items(self):
-        available_jokers = [MaxwellDemonJoker(), SchrodingerCatJoker()]
+        available_jokers = [
+            MaxwellDemonJoker(),
+            SchrodingerCatJoker(),
+            PhaseKickbackJoker(),
+            RotationCompilerJoker(),
+            TopologyBonusJoker(),
+        ]
         self.shop_jokers = [{"item": j, "cost": 8} for j in random.sample(available_jokers, random.randint(1, 2))]
-        self.shop_pack = {"name": "QUANTUM PACK", "cost": 4}
+        pack = random.choice(self.pack_catalog)
+        self.shop_pack = {"name": pack["name"], "type": pack["type"], "desc": pack["desc"], "cost": 4}
+
+    def create_pack_card(self, pack_type):
+        pools = {
+            "phase": [
+                Card("Phase Kick (RZ)", "RZ", "purple", "RZ changes relative phase and helps Phase Lock hands."),
+                Card("Controlled Phase (CZ)", "CZ", "purple", "CZ connects two selected qubits through phase.", 2),
+                Card("Sharp Z", "Z", "gold", "A paid Z card with strong phase-hand synergy."),
+            ],
+            "rotation": [
+                Card("Rotation X (RX)", "RX", "purple", "RX rotates around the X axis by pi/2."),
+                Card("Rotation Y (RY)", "RY", "purple", "RY rotates around the Y axis by pi/2."),
+                Card("Rotation Z (RZ)", "RZ", "purple", "RZ rotates around the Z axis by pi/2."),
+            ],
+            "entangle": [
+                Card("Controlled-NOT Plus", "CNOT", "purple", "Choose source and target to decide entanglement direction.", 2),
+                Card("Swap Link", "SWAP", "purple", "SWAP exchanges the states of two selected qubits.", 2),
+                Card("Controlled-Z Link", "CZ", "blue", "CZ is a phase entangler with explicit target choice.", 2),
+            ],
+            "control": [
+                Card("Toffoli Gate (CCX)", "CCX", "gold", "Two controls flip one target; a rare late-game logic card.", 3),
+                Card("Swap Link", "SWAP", "purple", "SWAP exchanges the states of two selected qubits.", 2),
+            ],
+        }
+        return random.choice(pools.get(pack_type, pools["rotation"]))
+
+    def _lesson_for_hand(self, hand_name, gate_types):
+        if hand_name.startswith("Bell Pair") or hand_name.startswith("GHZ"):
+            body = "Entanglement comes from a superposition source followed by controlled gates. Change CNOT targets to see fidelity move."
+        elif hand_name.startswith("Phase"):
+            body = "Phase gates may not change bar probabilities immediately, but they change interference and target-state overlap."
+        elif hand_name.startswith("Rotation"):
+            body = "Rotation cards use a fixed pi/2 angle here, introducing continuous gates without needing a slider yet."
+        elif hand_name.startswith("Swap"):
+            body = "SWAP changes where quantum information lives, so line routing becomes part of the puzzle."
+        elif hand_name.startswith("Toffoli"):
+            body = "CCX is a reversible three-qubit control gate: two controls decide whether the target flips."
+        else:
+            body = "This is a simple hand. Add H, CNOT, phase, or rotation cards to reach richer target states."
+        return {"title": hand_name, "body": body, "gates": gate_types}
 
     def next_blind_from_shop(self):
         if self.phase != 'SHOP': return

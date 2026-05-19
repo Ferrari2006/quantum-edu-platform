@@ -240,7 +240,7 @@ npm.cmd run build
 
 ## 开发说明
 
-- 前端目前在 `GamePage.jsx` 中使用固定 API base：`http://127.0.0.1:8000/api/quantum-game`，因此后端建议运行在 `8000` 端口。
+- 前端游戏页使用相对 API base：`/api/quantum-game`；本地开发时由 Vite proxy 转发到后端默认 `8000` 端口。
 - 后端游戏状态当前保存在进程内存中，刷新页面后可继续读取当前 active game，但重启后端会丢失状态。
 - `games/` 下保留了不同阶段的游戏原型。Web 版主要通过 `backend/api/game_routes.py` 接入核心逻辑。
 - `backend/rag/` 是智能问答系统的核心预留模块，目前提供最小接口骨架，后续重点是补齐文档处理、检索和回答链路。

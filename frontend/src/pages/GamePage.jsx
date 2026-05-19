@@ -1,10 +1,76 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./GamePage.css";
 
-const API_BASE = "http://127.0.0.1:8000/api/quantum-game";
+const API_BASE = "/api/quantum-game";
 const GATES = ["H", "X", "Z", "CNOT"];
 const STATES = ["00", "01", "10", "11"];
 const DRAG_TYPE = "application/quantum-game";
+const CIRCUIT_TUTORIAL_STORAGE_KEY = "quantum-hacker-tutorial-complete";
+const CONTROLLED_GATES = new Set(["CNOT", "CZ", "SWAP"]);
+const CIRCUIT_TUTORIAL_STEPS = [
+  {
+    key: "circuit-intro",
+    title: "欢迎来到 Quantum Hacker",
+    body: "这是一局两比特线路谜题。每个盲注都有目标概率分布，你要搭出尽量接近目标的量子线路来得分。",
+    cue: "点击继续",
+  },
+  {
+    key: "circuit-target",
+    title: "先看右侧目标",
+    body: "柱状图里蓝色是当前线路概率，黄色标记是目标概率。越贴近目标，基础筹码越高。",
+    cue: "看目标概率",
+  },
+  {
+    key: "circuit-gates",
+    title: "选择并放置量子门",
+    body: "上方 H、X、Z、CNOT 是门牌。先选门，再点击插槽放置；也可以把门拖进线路格子。",
+    cue: "看门和插槽",
+  },
+  {
+    key: "circuit-risk",
+    title: "Observe 是风险按钮",
+    body: "Observe 会保存当前倍数，但会触发轮盘事件。用得越多、存的倍数越高，风险越大。",
+    cue: "看 Observe",
+  },
+  {
+    key: "circuit-score",
+    title: "准备好就 Play Hand",
+    body: "Play Hand 会结算当前线路、消耗一次出手机会，并在达标后进入商店。Boss 关还会限制线路规则。",
+    cue: "开始破解",
+  },
+];
+const CARD_TUTORIAL_STEPS = [
+  {
+    key: "intro",
+    title: "欢迎来到量子卡牌局",
+    body: "这一局的目标是在出牌次数用完前达到盲注分数。你会把手牌变成一段量子线路，然后按保真度结算分数。",
+    cue: "点击继续",
+  },
+  {
+    key: "hand",
+    title: "先看底部手牌",
+    body: "每张牌是一种量子门。点击手牌可以选中并弃牌，拖拽手牌可以放进上方线路。",
+    cue: "看手牌",
+  },
+  {
+    key: "stage",
+    title: "拖到线路插槽",
+    body: "横向插槽代表时间顺序，纵向行代表作用在哪个量子比特上。也可以把鼠标移到空插槽上，直接点弹出的门名。",
+    cue: "看线路",
+  },
+  {
+    key: "control",
+    title: "受控门要选目标",
+    body: "CNOT、CZ、SWAP 这类多比特门会显示目标选择器。源比特和目标比特的方向会影响纠缠结果。",
+    cue: "看目标选择",
+  },
+  {
+    key: "score",
+    title: "出牌并观察结算",
+    body: "右侧会显示最近一次牌型、分数拆解和教学提示。准备好后按 Play Hand；不想要的牌可以选中后 Discard。",
+    cue: "开始游戏",
+  },
+];
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -87,11 +153,23 @@ function GameLobby({ gamesList, onStart }) {
 function CircuitGame({ state, onRefresh, onExit }) {
   const [selectedGate, setSelectedGate] = useState("H");
   const [showRules, setShowRules] = useState(false);
+  const [showTutorialLocal, setShowTutorialLocal] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const gatesBySlot = useMemo(() => {
     const map = new Map();
     state.gates.forEach((gate) => map.set(`${gate.qubit}_${gate.slot}`, gate));
     return map;
   }, [state.gates]);
+  const tutorial = CIRCUIT_TUTORIAL_STEPS[tutorialStep] || CIRCUIT_TUTORIAL_STEPS[0];
+
+  useEffect(() => {
+    const tutorialDone = window.localStorage.getItem(CIRCUIT_TUTORIAL_STORAGE_KEY) === "1";
+    const shouldShow = state.phase === "PLAYING" && state.level_index === 0 && !tutorialDone;
+    setShowTutorialLocal(shouldShow);
+    if (shouldShow) {
+      setTutorialStep(0);
+    }
+  }, [state.phase, state.level_index]);
 
   const setGate = async (qubit, slot) => {
     const key = `${qubit}_${slot}`;
@@ -143,6 +221,19 @@ function CircuitGame({ state, onRefresh, onExit }) {
     await onRefresh();
   };
 
+  const finishTutorial = () => {
+    window.localStorage.setItem(CIRCUIT_TUTORIAL_STORAGE_KEY, "1");
+    setShowTutorialLocal(false);
+  };
+
+  const advanceTutorial = () => {
+    if (tutorialStep >= CIRCUIT_TUTORIAL_STEPS.length - 1) {
+      finishTutorial();
+      return;
+    }
+    setTutorialStep((current) => current + 1);
+  };
+
   if (showRules) {
     return <CircuitRulesPage onBack={() => setShowRules(false)} onExit={onExit} />;
   }
@@ -156,7 +247,30 @@ function CircuitGame({ state, onRefresh, onExit }) {
   }
 
   return (
-    <main className="board-screen">
+    <main className={`board-screen ${showTutorialLocal ? `tutorial-active tutorial-step-${tutorial.key}` : ""}`}>
+      {showTutorialLocal && (
+        <div className="tutorial-overlay" onClick={advanceTutorial}>
+          <div className="tutorial-box" role="dialog" aria-modal="true" aria-labelledby="circuit-tutorial-title">
+            <div className="tutorial-progress" aria-label={`Tutorial step ${tutorialStep + 1} of ${CIRCUIT_TUTORIAL_STEPS.length}`}>
+              {CIRCUIT_TUTORIAL_STEPS.map((step, index) => (
+                <span key={step.key} className={index <= tutorialStep ? "active" : ""} />
+              ))}
+            </div>
+            <span className="tutorial-kicker">Step {tutorialStep + 1} / {CIRCUIT_TUTORIAL_STEPS.length}</span>
+            <h2 id="circuit-tutorial-title">{tutorial.title}</h2>
+            <p>{tutorial.body}</p>
+            <div className="tutorial-actions">
+              <button className="btn btn-clear" onClick={(event) => { event.stopPropagation(); finishTutorial(); }}>
+                跳过
+              </button>
+              <button className="btn btn-play-hand" onClick={(event) => { event.stopPropagation(); advanceTutorial(); }}>
+                {tutorialStep >= CIRCUIT_TUTORIAL_STEPS.length - 1 ? "开始游戏" : "继续"}
+              </button>
+            </div>
+            <small>{tutorial.cue}</small>
+          </div>
+        </div>
+      )}
       <TopBar onExit={onExit} onRules={() => setShowRules(true)} />
       <header className="hud">
         <div>
@@ -364,23 +478,52 @@ function CardGame({ state, onRefresh, onExit }) {
   const [stagedCards, setStagedCards] = useState({});
   const [draggingCardId, setDraggingCardId] = useState(null);
   const [showRules, setShowRules] = useState(false);
+  const [showTutorialLocal, setShowTutorialLocal] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   useEffect(() => {
     setSelectedCardIds([]);
     setStagedCards({});
-  }, [state.phase, state.hand_cards.length, state.current_score, state.plays_left, state.discards_left]);
+    setShowTutorialLocal(Boolean(state.show_tutorial));
+    if (state.show_tutorial) {
+      setTutorialStep(0);
+    }
+  }, [state.phase, state.hand_cards.length, state.current_score, state.plays_left, state.discards_left, state.show_tutorial]);
+
+  const tutorial = CARD_TUTORIAL_STEPS[tutorialStep] || CARD_TUTORIAL_STEPS[0];
 
   const visibleStagedCards = useMemo(() => {
     return Object.fromEntries(
-      Object.entries(stagedCards).filter((entry) => state.hand_cards[entry[1]]),
+      Object.entries(stagedCards).filter((entry) => state.hand_cards[entry[1].cardIndex]),
     );
   }, [stagedCards, state.hand_cards]);
 
   const stageCard = (cardIndex, qubit, slot) => {
     setStagedCards((current) => {
-      const next = Object.fromEntries(Object.entries(current).filter((entry) => entry[1] !== cardIndex));
-      next[`${qubit}_${slot}`] = cardIndex;
+      const card = state.hand_cards[cardIndex];
+      const next = Object.fromEntries(
+        Object.entries(current).filter((entry) => entry[1].cardIndex !== cardIndex),
+      );
+      next[`${qubit}_${slot}`] = {
+        cardIndex,
+        targets: CONTROLLED_GATES.has(card?.gate) ? [qubit, (qubit + 1) % state.num_qubits] : [qubit],
+      };
       return next;
+    });
+  };
+
+  const setControlledTarget = (qubit, slot, target) => {
+    const key = `${qubit}_${slot}`;
+    setStagedCards((current) => {
+      const staged = current[key];
+      if (!staged) return current;
+      return {
+        ...current,
+        [key]: {
+          ...staged,
+          targets: [qubit, Number(target)],
+        },
+      };
     });
   };
 
@@ -416,8 +559,8 @@ function CardGame({ state, onRefresh, onExit }) {
     await api("/play", {
       method: "POST",
       body: JSON.stringify({
-        selected_indices: pairs.map((pair) => pair[1]),
-        targets: pairs.map((pair) => [Number(pair[0].split("_")[0])]),
+        selected_indices: pairs.map((pair) => pair[1].cardIndex),
+        targets: pairs.map((pair) => pair[1].targets || [Number(pair[0].split("_")[0])]),
       }),
     });
     await onRefresh();
@@ -434,6 +577,24 @@ function CardGame({ state, onRefresh, onExit }) {
     await onRefresh();
   };
 
+  const finishTutorial = async () => {
+    try {
+      await api("/cards/tutorial/complete", { method: "POST" });
+    } catch (err) {
+      console.error("Failed to complete tutorial", err);
+    }
+    setShowTutorialLocal(false);
+    await onRefresh();
+  };
+
+  const advanceTutorial = async () => {
+    if (tutorialStep >= CARD_TUTORIAL_STEPS.length - 1) {
+      await finishTutorial();
+      return;
+    }
+    setTutorialStep((current) => current + 1);
+  };
+
   if (showRules) {
     return <CardRulesPage onBack={() => setShowRules(false)} onExit={onExit} />;
   }
@@ -447,7 +608,30 @@ function CardGame({ state, onRefresh, onExit }) {
   }
 
   return (
-    <main className="board-screen">
+    <main className={`board-screen ${showTutorialLocal ? `tutorial-active tutorial-step-${tutorial.key}` : ""}`}>
+      {showTutorialLocal && (
+        <div className="tutorial-overlay" onClick={advanceTutorial}>
+          <div className="tutorial-box" role="dialog" aria-modal="true" aria-labelledby="card-tutorial-title">
+            <div className="tutorial-progress" aria-label={`Tutorial step ${tutorialStep + 1} of ${CARD_TUTORIAL_STEPS.length}`}>
+              {CARD_TUTORIAL_STEPS.map((step, index) => (
+                <span key={step.key} className={index <= tutorialStep ? "active" : ""} />
+              ))}
+            </div>
+            <span className="tutorial-kicker">Step {tutorialStep + 1} / {CARD_TUTORIAL_STEPS.length}</span>
+            <h2 id="card-tutorial-title">{tutorial.title}</h2>
+            <p>{tutorial.body}</p>
+            <div className="tutorial-actions">
+              <button className="btn btn-clear" onClick={(event) => { event.stopPropagation(); finishTutorial(); }}>
+                跳过
+              </button>
+              <button className="btn btn-play-hand" onClick={(event) => { event.stopPropagation(); advanceTutorial(); }}>
+                {tutorialStep >= CARD_TUTORIAL_STEPS.length - 1 ? "开始游戏" : "继续"}
+              </button>
+            </div>
+            <small>{tutorial.cue}</small>
+          </div>
+        </div>
+      )}
       <TopBar onExit={onExit} onRules={() => setShowRules(true)} />
       <header className="hud">
         <div>
@@ -466,17 +650,22 @@ function CardGame({ state, onRefresh, onExit }) {
       <section className="main-layout">
         <div className="circuit-board">
           <h3>Card Staging Circuit</h3>
+          <div className="circuit-grid">
           {Array.from({ length: state.num_qubits }, (_, qubit) => (
             <div key={qubit} className="circuit-row">
               <span className="qubit-label">q[{qubit}]</span>
               <div className="slots-container">
                 {[0, 1, 2, 3].map((slot) => {
-                  const stagedCardIdx = visibleStagedCards[`${qubit}_${slot}`];
+                  const staged = visibleStagedCards[`${qubit}_${slot}`];
+                  const stagedCardIdx = staged?.cardIndex;
                   const card = state.hand_cards[stagedCardIdx];
+                  const isControlled = CONTROLLED_GATES.has(card?.gate);
+                  const targetQubit = staged?.targets?.[1] ?? (qubit + 1) % state.num_qubits;
+                  const targetOffset = targetQubit - qubit;
                   return (
                     <div
                       key={slot}
-                      className={`circuit-slot ${card ? "occupied draggable-card-slot" : ""}`}
+                      className={`circuit-slot ${card ? "occupied draggable-card-slot" : ""} ${isControlled ? "controlled-gate" : ""}`}
                       draggable={Boolean(card)}
                       onDragStart={(event) => card && startCardDrag(event, stagedCardIdx, "stage")}
                       onDragEnd={() => setDraggingCardId(null)}
@@ -485,11 +674,33 @@ function CardGame({ state, onRefresh, onExit }) {
                       onClick={() => card && unstageSlot(qubit, slot)}
                       title={card ? "Drag to another slot or click to remove" : "Drop a card here"}
                     >
+                      {isControlled && (
+                        <span
+                          className={`gate-connector ${targetOffset < 0 ? "target-up" : "target-down"}`}
+                          style={{ "--connector-span": Math.max(1, Math.abs(targetOffset)) }}
+                          aria-hidden="true"
+                        />
+                      )}
                       {card?.gate || "+"}
+                      {isControlled && (
+                        <label className="target-picker" onClick={(event) => event.stopPropagation()}>
+                          <span>to</span>
+                          <select
+                            value={targetQubit}
+                            onChange={(event) => setControlledTarget(qubit, slot, event.target.value)}
+                          >
+                            {Array.from({ length: state.num_qubits }, (_, option) => (
+                              <option key={option} value={option} disabled={option === qubit}>
+                                q{option}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                       {!card && (
                         <div className="slot-selector">
                           {state.hand_cards.map((handCard, index) =>
-                            Object.values(visibleStagedCards).includes(index) ? null : (
+                            Object.values(visibleStagedCards).some((item) => item.cardIndex === index) ? null : (
                               <button key={handCard.id} onClick={() => stageCard(index, qubit, slot)}>
                                 {handCard.gate}
                               </button>
@@ -503,6 +714,7 @@ function CardGame({ state, onRefresh, onExit }) {
               </div>
             </div>
           ))}
+          </div>
         </div>
 
         <aside className="control-panel">
@@ -511,6 +723,7 @@ function CardGame({ state, onRefresh, onExit }) {
             <strong>{state.last_hand_played}</strong>
           </div>
           <CardScoreBreakdown breakdown={state.last_score_breakdown} />
+          <TeachingPanel lesson={state.lesson} />
           <button className="btn btn-play-hand" onClick={playHand} disabled={!Object.keys(visibleStagedCards).length}>
             Play Hand
           </button>
@@ -534,7 +747,7 @@ function CardGame({ state, onRefresh, onExit }) {
         )}
         <div className="cards-container">
           {state.hand_cards.map((card, index) => {
-            if (Object.values(visibleStagedCards).includes(index)) return null;
+            if (Object.values(visibleStagedCards).some((item) => item.cardIndex === index)) return null;
             const selected = selectedCardIds.includes(index);
             return (
               <button
@@ -554,11 +767,14 @@ function CardGame({ state, onRefresh, onExit }) {
               >
                 <strong>{card.gate}</strong>
                 <span>{card.name}</span>
+                {card.targets > 1 && <small>{card.targets}-qubit</small>}
               </button>
             );
           })}
         </div>
       </section>
+
+      <LearningCatalog state={state} />
 
       {state.phase !== "PLAYING" && (
         <div className="game-overlay">
@@ -630,7 +846,7 @@ function CardShop({ state, onAction, onExit, onRules }) {
             <article className="shop-card pack-shop-card">
               <span className="shop-type">PACK</span>
               <h4>{state.shop_pack.name}</h4>
-              <p>Open to reveal a purple RX phase card, then collect it into your deck.</p>
+              <p>{state.shop_pack.desc || "Open to reveal a quantum gate card, then collect it into your deck."}</p>
               <strong>${state.shop_pack.cost}</strong>
               <button
                 className="btn btn-observe"
@@ -707,6 +923,7 @@ function PackOpening({ state, onAction, onExit, onRules }) {
               <strong>{card.gate}</strong>
               <span>{card.name}</span>
               <small>Uses: {card.durability}</small>
+              {card.lesson && <small>{card.lesson}</small>}
             </article>
           )}
         </div>
@@ -812,6 +1029,43 @@ function CardScoreBreakdown({ breakdown }) {
         <strong>{breakdown.score}</strong>
       </div>
     </div>
+  );
+}
+
+function TeachingPanel({ lesson }) {
+  if (!lesson?.title && !lesson?.body) return null;
+  return (
+    <div className="teaching-panel">
+      <h3>{lesson.title || "Quantum lesson"}</h3>
+      <p>{lesson.body}</p>
+      {lesson.gates?.length ? <small>Played gates: {lesson.gates.join(", ")}</small> : null}
+    </div>
+  );
+}
+
+function LearningCatalog({ state }) {
+  const hands = state.hand_catalog || [];
+  const packs = state.pack_catalog || [];
+  if (!hands.length && !packs.length) return null;
+  return (
+    <section className="learning-catalog">
+      <div>
+        <h3>Hand Types</h3>
+        <div className="catalog-grid">
+          {hands.map((hand) => (
+            <span key={hand.name}>{hand.name}: {hand.chips} x {hand.mult}</span>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3>Pack Types</h3>
+        <div className="catalog-grid">
+          {packs.map((pack) => (
+            <span key={pack.type}>{pack.name}: {pack.desc}</span>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 

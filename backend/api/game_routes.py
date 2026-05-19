@@ -58,6 +58,41 @@ CIRCUIT_JOKERS = [
         "cost": 6,
         "color": "gold",
     },
+    {
+        "id": "PHASE_BYPASS",
+        "name": "Phase Key",
+        "desc": "Bypass Phase Lock boss requirement",
+        "cost": 5,
+        "color": "cyan",
+    },
+    {
+        "id": "ENTANGLE_STABILIZER",
+        "name": "Stabilizer",
+        "desc": "Entangler accepts any CNOT count",
+        "cost": 7,
+        "color": "red",
+    },
+    {
+        "id": "COMPRESSION",
+        "name": "Compiler",
+        "desc": "Sparse Memory limit +1; circuits with 3 or fewer gates gain x1.8",
+        "cost": 8,
+        "color": "gold",
+    },
+    {
+        "id": "MEASURE",
+        "name": "Projector",
+        "desc": "+80 chips on single-state target puzzles",
+        "cost": 5,
+        "color": "cyan",
+    },
+    {
+        "id": "BALANCER",
+        "name": "Balancer",
+        "desc": "+120 chips on four-state uniform target puzzles",
+        "cost": 6,
+        "color": "red",
+    },
 ]
 
 
@@ -147,6 +182,11 @@ class CircuitGameSession:
                 "match_chips": chips,
                 "gate_mult": mult,
                 "stored_mult": round(self.stored_mult, 2),
+            },
+            "lesson": {
+                "title": "Target probability puzzle",
+                "body": "Match the yellow target marks. Boss blinds add constraints, so the best circuit is sometimes the simplest legal one.",
+                "boss": level["boss_type"],
             },
         }
 
@@ -358,6 +398,7 @@ def get_game_state() -> dict[str, Any]:
     return {
         "active": True,
         "kind": "cards",
+        "show_tutorial": not getattr(game, "seen_tutorial", False) and game.phase == 'PLAYING',
         "game_id": active["id"],
         "phase": game.phase,
         "chips": game.chips,
@@ -391,6 +432,8 @@ def get_game_state() -> dict[str, Any]:
                 "gate": card.gate_type,
                 "rarity": card.rarity,
                 "durability": card.durability,
+                "lesson": getattr(card, "lesson", ""),
+                "targets": getattr(card, "target_count", 1),
             }
             for index, card in enumerate(game.hand)
         ],
@@ -411,11 +454,22 @@ def get_game_state() -> dict[str, Any]:
                 "gate": game.opened_card.gate_type,
                 "rarity": game.opened_card.rarity,
                 "durability": game.opened_card.durability,
+                "lesson": getattr(game.opened_card, "lesson", ""),
             }
             if getattr(game, "opened_card", None)
             else None
         ),
+        "lesson": getattr(game, "current_lesson", {}),
+        "hand_catalog": getattr(game, "hand_catalog", []),
+        "pack_catalog": getattr(game, "pack_catalog", []),
     }
+
+
+@router.post("/cards/tutorial/complete")
+def complete_card_tutorial() -> dict[str, bool]:
+    game = active_card_game()
+    game.seen_tutorial = True
+    return {"ok": True}
 
 
 def active_circuit_session() -> CircuitGameSession:
@@ -564,7 +618,7 @@ def buy_card_pack() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Not enough chips")
 
     game.chips -= game.shop_pack["cost"]
-    game.opened_card = Card("Phase (RX)", "RX", "purple")
+    game.opened_card = game.create_pack_card(game.shop_pack["type"])
     game.shop_pack = False
     game.phase = "OPENING_PACK"
     return {"phase": game.phase, "chips": game.chips}

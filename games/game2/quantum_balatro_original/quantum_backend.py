@@ -1,7 +1,11 @@
 import numpy as np
 import random
+import logging
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, state_fidelity
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 class QuantumBackend:
     """
@@ -37,6 +41,12 @@ class QuantumBackend:
         :param target_qubits: 目标比特列表 (如 [0], [0, 1], 或 [0, 1, 2])
         :param theta: 连续旋转门的角度 (仅对 RX, RY, RZ 等有效)
         """
+        # 输入验证
+        if not isinstance(target_qubits, (list, tuple)) or len(target_qubits) == 0:
+            raise ValueError("target_qubits must be a non-empty list of indices")
+        if any(not isinstance(t, int) or t < 0 or t >= self.num_qubits for t in target_qubits):
+            raise ValueError("target_qubits contains index out of range")
+
         # === 1. 单比特门 ===
         if gate_type == 'H':
             self.circuit.h(target_qubits[0])
@@ -70,9 +80,12 @@ class QuantumBackend:
             self.circuit.ccx(target_qubits[0], target_qubits[1], target_qubits[2])
         elif gate_type == 'CSWAP' or gate_type == 'FREDKIN':
             self.circuit.cswap(target_qubits[0], target_qubits[1], target_qubits[2])
-
         # 每次操作后，更新底层系统的状态向量
-        self.current_state = Statevector.from_instruction(self.circuit)
+        try:
+            self.current_state = Statevector.from_instruction(self.circuit)
+        except Exception as e:
+            logger.exception("Failed to update statevector after applying gate %s to %s: %s", gate_type, target_qubits, e)
+            raise
 
     def inject_noise(self, intensity=0.15):
         """
@@ -81,22 +94,38 @@ class QuantumBackend:
         
         :param intensity: 噪声强度，决定了随机角度的最大偏转范围。
         """
+        if self.num_qubits <= 0:
+            logger.warning("No qubits available to inject noise")
+            return
+
+        # 限制 intensity 范围
+        if not (0 <= intensity <= 1):
+            logger.warning("Noise intensity out of range; clamping to [0,1]")
+            intensity = max(0.0, min(1.0, intensity))
+
         # 随机选择一个受害的量子比特
         target = random.randint(0, self.num_qubits - 1)
         # 随机选择一种相位或翻转噪声
         noise_type = random.choice(['RX', 'RY', 'RZ'])
         # 生成一个介于 -intensity 到 +intensity 之间的微小角度
         angle = random.uniform(-intensity, intensity)
-        
-        if noise_type == 'RX':
-            self.circuit.rx(angle, target)
-        elif noise_type == 'RY':
-            self.circuit.ry(angle, target)
-        else:
-            self.circuit.rz(angle, target)
-            
-        print(f"[Backend Warning] 发生量子噪声！Q{target} 发生了 {noise_type}({angle:.3f}) 的相干偏移。")
-        self.current_state = Statevector.from_instruction(self.circuit)
+
+        try:
+            if noise_type == 'RX':
+                self.circuit.rx(angle, target)
+            elif noise_type == 'RY':
+                self.circuit.ry(angle, target)
+            else:
+                self.circuit.rz(angle, target)
+        except Exception as e:
+            logger.exception("Failed to inject noise: %s", e)
+            return
+
+        logger.warning("[Backend Warning] Injected quantum noise on Q%d: %s(%.3f)", target, noise_type, angle)
+        try:
+            self.current_state = Statevector.from_instruction(self.circuit)
+        except Exception as e:
+            logger.exception("Failed to update statevector after noise injection: %s", e)
 
     def calculate_fidelity(self, target_statevector):
         """

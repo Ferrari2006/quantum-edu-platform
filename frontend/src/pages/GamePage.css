@@ -1,6 +1,6 @@
 .quantum-game {
   min-height: calc(100vh - 72px);
-  padding: 24px;
+  padding: clamp(16px, 1.6vw, 32px);
   background:
     linear-gradient(180deg, rgba(17, 19, 26, 0.96), rgba(10, 13, 20, 1)),
     repeating-linear-gradient(90deg, rgba(110, 231, 249, 0.04) 0 1px, transparent 1px 96px);
@@ -142,8 +142,9 @@
 }
 
 .board-screen {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .top-controls {
@@ -235,7 +236,7 @@
 
 .main-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
   gap: 18px;
 }
 
@@ -289,12 +290,17 @@
 }
 
 .circuit-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
   margin: 22px 0;
   padding: 10px 0;
   border-top: 1px solid rgba(75, 96, 121, 0.38);
+}
+
+.circuit-grid {
+  position: relative;
 }
 
 .qubit-label {
@@ -304,14 +310,27 @@
 }
 
 .slots-container {
+  position: relative;
   display: grid;
   flex: 1;
   grid-template-columns: repeat(4, minmax(68px, 1fr));
   gap: 14px;
 }
 
+.slots-container::before {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(139, 211, 255, 0.18), rgba(139, 211, 255, 0.58), rgba(139, 211, 255, 0.18));
+  content: "";
+  transform: translateY(-50%);
+}
+
 .circuit-slot {
   position: relative;
+  z-index: 1;
   min-height: 72px;
   border: 2px dashed #3c4a60;
   border-radius: 8px;
@@ -337,11 +356,76 @@
   box-shadow: inset 0 -3px 0 rgba(192, 132, 252, 0.28);
 }
 
+.controlled-gate {
+  overflow: visible;
+}
+
+.gate-connector {
+  position: absolute;
+  left: 50%;
+  z-index: 0;
+  width: 3px;
+  height: calc((72px + 42px) * var(--connector-span));
+  border-radius: 999px;
+  background: linear-gradient(180deg, #facc15, #67e8f9);
+  box-shadow: 0 0 12px rgba(103, 232, 249, 0.38);
+  transform: translateX(-50%);
+}
+
+.gate-connector.target-down {
+  top: 50%;
+}
+
+.gate-connector.target-up {
+  bottom: 50%;
+}
+
+.gate-connector::after {
+  position: absolute;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #facc15;
+  border-radius: 50%;
+  background: #101722;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.gate-connector.target-down::after {
+  bottom: -7px;
+}
+
+.gate-connector.target-up::after {
+  top: -7px;
+}
+
+.target-picker {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transform: translateX(-50%);
+  color: #fef3c7;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.target-picker select {
+  border: 1px solid #8b6f1e;
+  border-radius: 4px;
+  background: #14100a;
+  color: #fde68a;
+  font: inherit;
+}
+
 .slot-selector {
   position: absolute;
   top: 64px;
   left: 50%;
-  z-index: 5;
+  z-index: 1;
   display: none;
   width: 150px;
   grid-template-columns: repeat(2, 1fr);
@@ -442,6 +526,56 @@
   font-size: 18px;
 }
 
+.teaching-panel,
+.learning-catalog {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #314056;
+  border-radius: 8px;
+  padding: 14px;
+  background: #101722;
+}
+
+.teaching-panel h3,
+.teaching-panel p,
+.learning-catalog h3 {
+  margin: 0;
+}
+
+.teaching-panel h3,
+.learning-catalog h3 {
+  color: #9be7ff;
+  font-size: 16px;
+}
+
+.teaching-panel p,
+.teaching-panel small {
+  color: #b5bfd3;
+  line-height: 1.45;
+}
+
+.learning-catalog {
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  margin-top: 18px;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.catalog-grid span {
+  border: 1px solid #314056;
+  border-radius: 6px;
+  padding: 8px;
+  background: #0d1420;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .chance-grid,
 .roulette-chances {
   display: grid;
@@ -455,7 +589,7 @@
 .bars {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: clamp(10px, 1vw, 18px);
   margin-top: 14px;
 }
 
@@ -469,7 +603,7 @@
 
 .bar-track {
   position: relative;
-  width: 34px;
+  width: min(46px, 100%);
   height: 130px;
   border-radius: 6px;
   background: #0b1020;
@@ -524,15 +658,15 @@
 }
 
 .cards-container {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 156px));
   gap: 14px;
   margin-top: 14px;
 }
 
 .q-card {
   display: flex;
-  width: 116px;
+  width: 100%;
   min-height: 158px;
   flex-direction: column;
   align-items: center;
@@ -562,6 +696,12 @@
   padding: 0 8px;
   color: #b7c1d6;
   font-size: 12px;
+}
+
+.q-card small {
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .q-card.selected {
@@ -620,6 +760,133 @@
   background: #171d29;
   padding: 24px;
   overflow: hidden;
+}
+
+.tutorial-active::before {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(4, 6, 10, 0.66);
+  content: "";
+  pointer-events: none;
+}
+
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 26px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tutorial-box {
+  display: grid;
+  width: min(460px, 100%);
+  gap: 12px;
+  border: 1px solid #345065;
+  border-radius: 8px;
+  padding: 20px;
+  background: linear-gradient(180deg, #101827, #0b1220);
+  color: #e6f7ff;
+  box-shadow: 0 22px 58px rgba(2, 6, 23, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.tutorial-progress {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.tutorial-progress span {
+  height: 5px;
+  border-radius: 999px;
+  background: #263244;
+}
+
+.tutorial-progress span.active {
+  background: linear-gradient(90deg, #12b981, #67e8f9);
+}
+
+.tutorial-kicker,
+.tutorial-box small {
+  color: #9be7ff;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tutorial-box h2,
+.tutorial-box p {
+  margin: 0;
+}
+
+.tutorial-box h2 {
+  font-size: 22px;
+}
+
+.tutorial-box p {
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
+.tutorial-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.tutorial-step-hand .hand-area,
+.tutorial-step-stage .circuit-board,
+.tutorial-step-control .circuit-board,
+.tutorial-step-score .control-panel,
+.tutorial-step-circuit-target .control-panel,
+.tutorial-step-circuit-gates .circuit-board,
+.tutorial-step-circuit-risk .control-panel,
+.tutorial-step-circuit-score .control-panel {
+  position: relative;
+  z-index: 50;
+  animation: tutorial-panel-pulse 1.55s ease-in-out infinite;
+}
+
+.tutorial-step-hand .q-card:first-child,
+.tutorial-step-stage .circuit-slot,
+.tutorial-step-control .controlled-gate,
+.tutorial-step-control .target-picker,
+.tutorial-step-score .control-panel .btn-play-hand,
+.tutorial-step-circuit-target .prob-chart,
+.tutorial-step-circuit-gates .gate-palette button.active,
+.tutorial-step-circuit-gates .circuit-slot,
+.tutorial-step-circuit-risk .btn-observe,
+.tutorial-step-circuit-score .control-panel .btn-play-hand {
+  animation: tutorial-target-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes tutorial-panel-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.32), 0 12px 30px rgba(0, 0, 0, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(103, 232, 249, 0.13), 0 18px 42px rgba(0, 0, 0, 0.3);
+  }
+}
+
+@keyframes tutorial-target-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+    transform: translateY(0);
+  }
+  50% {
+    filter: brightness(1.18);
+    transform: translateY(-3px);
+  }
 }
 
 .roulette-pointer {
@@ -744,7 +1011,7 @@
 
 .shop-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
   gap: 18px;
 }
 
@@ -784,7 +1051,7 @@
 
 .rules-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -826,7 +1093,7 @@
 
 .shop-items {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
 
@@ -1147,7 +1414,25 @@
 @media (prefers-reduced-motion: reduce) {
   .pack-opening.opening .pack-shell,
   .pack-opening.opening .pack-rip,
-  .pack-opening.revealed .pack-reveal {
+  .pack-opening.revealed .pack-reveal,
+  .tutorial-step-hand .hand-area,
+  .tutorial-step-stage .circuit-board,
+  .tutorial-step-control .circuit-board,
+  .tutorial-step-score .control-panel,
+  .tutorial-step-circuit-target .control-panel,
+  .tutorial-step-circuit-gates .circuit-board,
+  .tutorial-step-circuit-risk .control-panel,
+  .tutorial-step-circuit-score .control-panel,
+  .tutorial-step-hand .q-card:first-child,
+  .tutorial-step-stage .circuit-slot,
+  .tutorial-step-control .controlled-gate,
+  .tutorial-step-control .target-picker,
+  .tutorial-step-score .control-panel .btn-play-hand,
+  .tutorial-step-circuit-target .prob-chart,
+  .tutorial-step-circuit-gates .gate-palette button.active,
+  .tutorial-step-circuit-gates .circuit-slot,
+  .tutorial-step-circuit-risk .btn-observe,
+  .tutorial-step-circuit-score .control-panel .btn-play-hand {
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
   }
@@ -1172,7 +1457,8 @@
   .main-layout,
   .shop-layout,
   .shop-items,
-  .rules-grid {
+  .rules-grid,
+  .learning-catalog {
     grid-template-columns: 1fr;
   }
 
@@ -1206,7 +1492,8 @@
   }
 
   .chance-grid,
-  .roulette-chances {
+  .roulette-chances,
+  .catalog-grid {
     grid-template-columns: 1fr;
   }
 
