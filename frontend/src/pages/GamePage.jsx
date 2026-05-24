@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Balatro from "../components/Balatro.jsx";
 import "./GamePage.css";
 
 const API_BASE = "/api/quantum-game";
@@ -30,6 +31,117 @@ const DRAG_TYPE = "application/quantum-game";
 const CIRCUIT_TUTORIAL_STORAGE_KEY = "quantum-hacker-tutorial-complete";
 const CONCEPT_CODEX_STORAGE_KEY = "quantum-concept-codex";
 const CONTROLLED_GATES = new Set(["CNOT", "CZ", "SWAP"]);
+const GATE_USAGE = {
+  H: "推荐用途：想把一个确定结果拆成多个可能结果时使用。常用于制造叠加，也常作为 CNOT 之前的起手。",
+  X: "推荐用途：想把 |0> 翻成 |1>，或把目标概率推向另一个基态时使用。",
+  Z: "推荐用途：它主要改变相位，概率图不一定立刻变化；适合相位奖励、相位目标或 Z 相关支线。",
+  CNOT: "推荐用途：先用 H 制造叠加，再接 CNOT，最容易做出 Bell Pair 或纠缠相关效果。",
+  CX: "推荐用途：CNOT 的另一种写法。用一个量子比特控制另一个量子比特翻转。",
+  CZ: "推荐用途：受控相位门。适合相位流、Phase Lock、以及需要两个量子比特产生相位关联时。",
+  SWAP: "推荐用途：交换两个量子比特的状态。适合修正线路路由，或触发拓扑/换线相关牌型。",
+  RX: "推荐用途：绕 X 轴旋转。适合旋转流，也能把确定态转成带角度的量子态。",
+  RY: "推荐用途：绕 Y 轴旋转。适合制造平滑的概率变化，常用于提高保真度。",
+  RZ: "推荐用途：绕 Z 轴改变相位。适合相位流和 Phase Experiment 事件。",
+  CCX: "推荐用途：两个控制位共同决定一次翻转。适合高阶控制牌型和后期强牌。",
+  NOISE: "推荐用途：噪声通常不是好牌，尽量通过弃牌或卡包管理减少它的影响。",
+};
+
+function gateUsage(gate) {
+  return GATE_USAGE[String(gate || "").toUpperCase()] || "推荐用途：观察目标概率和当前牌型，尝试把它放在线路中测试效果。";
+}
+
+function buildRecommendationMap(gates = []) {
+  const map = new Map();
+  if (!Array.isArray(gates)) return map;
+  gates.forEach((gate) => {
+    if (!gate || !Number.isInteger(gate.qubit) || !Number.isInteger(gate.slot)) return;
+    map.set(`${gate.qubit}_${gate.slot}`, gate);
+  });
+  return map;
+}
+
+function normalizeRecommendation(recommendation) {
+  return {
+    used: true,
+    text: recommendation?.text || "",
+    gates: Array.isArray(recommendation?.gates) ? recommendation.gates : [],
+  };
+}
+
+function availableGate(state, preferred, fallback = null) {
+  const hand = Array.isArray(state.hand_cards) ? state.hand_cards : [];
+  if (hand.some((card) => card.gate === preferred)) return preferred;
+  return fallback || hand[0]?.gate || preferred;
+}
+
+function localCircuitRecommendation(state) {
+  const targets = state.level?.target_probs || {};
+  const positive = Object.entries(targets)
+    .filter(([, probability]) => probability > 0.01)
+    .map(([name]) => name);
+  const positiveSet = new Set(positive);
+
+  if (positiveSet.size === 1 && positiveSet.has("00")) {
+    return normalizeRecommendation({
+      text: "目标只有 00：少放门，保持干净态。",
+      gates: [{ gate: "KEEP", qubit: 0, slot: 0 }],
+    });
+  }
+
+  if (positiveSet.has("00") && positiveSet.has("11")) {
+    const gates = [{ gate: availableGate(state, "H"), qubit: 0, slot: 0 }];
+    if (availableGate(state, "CNOT", "") === "CNOT") {
+      gates.push({ gate: "CNOT", qubit: 0, slot: 1, targets: [0, 1] });
+    }
+    return normalizeRecommendation({
+      text: "想触发 Bell Pair：先 H，再 CNOT。",
+      gates,
+    });
+  }
+
+  if (positiveSet.has("00") && positiveSet.has("10") && positiveSet.size <= 2) {
+    return normalizeRecommendation({
+      text: "想让 00 和 10 都出现：试试 H 放在 q0。",
+      gates: [{ gate: availableGate(state, "H"), qubit: 0, slot: 0 }],
+    });
+  }
+
+  return normalizeRecommendation({
+    text: "目标分布较散：先用 H 制造叠加，再根据目标微调。",
+    gates: [{ gate: availableGate(state, "H"), qubit: 0, slot: 0 }],
+  });
+}
+
+function localCardRecommendation(state) {
+  const hand = Array.isArray(state.hand_cards) ? state.hand_cards : [];
+  const hasGate = (gate) => hand.some((card) => card.gate === gate);
+  if (hasGate("H") && hasGate("CNOT")) {
+    return normalizeRecommendation({
+      text: "想触发 Bell Pair：先 H，再 CNOT。",
+      gates: [
+        { gate: "H", qubit: 0, slot: 0 },
+        { gate: "CNOT", qubit: 0, slot: 1, targets: [0, 1] },
+      ],
+    });
+  }
+  if (hasGate("H")) {
+    return normalizeRecommendation({
+      text: "想让多个结果出现：先把 H 放在 q0。",
+      gates: [{ gate: "H", qubit: 0, slot: 0 }],
+    });
+  }
+  const phaseGate = ["Z", "CZ", "RZ"].find((gate) => hasGate(gate));
+  if (phaseGate) {
+    return normalizeRecommendation({
+      text: "手里有相位牌：优先试一次相位门，配合相位奖励。",
+      gates: [{ gate: phaseGate, qubit: 0, slot: 0 }],
+    });
+  }
+  return normalizeRecommendation({
+    text: "目标只有 00 时可以少放门；否则先放一张最稳定的基础门试探。",
+    gates: [{ gate: hand[0]?.gate || "KEEP", qubit: 0, slot: 0 }],
+  });
+}
 const CIRCUIT_TUTORIAL_STEPS = [
   {
     key: "circuit-intro",
@@ -375,6 +487,26 @@ function buildSynergySummary(jokers = [], gates = []) {
   return entries.length ? entries : [{ key: "Wildcard", score: 0, ...BUILD_ARCHETYPES.Wildcard }];
 }
 
+function QuantumBalatroBackdrop() {
+  return (
+    <div className="quantum-balatro-backdrop" aria-hidden="true">
+      <Balatro
+        color1="#12B981"
+        color2="#0EA5E9"
+        color3="#0B1020"
+        contrast={3.2}
+        isRotate
+        lighting={0.34}
+        mouseInteraction
+        pixelFilter={700}
+        spinAmount={0.22}
+        spinRotation={-1.8}
+        spinSpeed={5.2}
+      />
+    </div>
+  );
+}
+
 export default function GamePage() {
   const [gamesList, setGamesList] = useState([]);
   const [gameState, setGameState] = useState(null);
@@ -418,11 +550,17 @@ export default function GamePage() {
   };
 
   if (!gameState) {
-    return <div className="quantum-game">正在加载量子游戏...</div>;
+    return (
+      <div className="quantum-game">
+        <QuantumBalatroBackdrop />
+        <div className="game-loading">Loading quantum game...</div>
+      </div>
+    );
   }
 
   return (
     <div className="quantum-game">
+      <QuantumBalatroBackdrop />
       <button className="codex-toggle" onClick={() => setCodexOpen(true)}>
         概念图鉴 <span>{conceptIds.length}/{CONCEPT_LIBRARY.length}</span>
       </button>
@@ -473,6 +611,9 @@ function CircuitGame({ state, onRefresh, onExit }) {
   const [showTutorialLocal, setShowTutorialLocal] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [playAnimating, setPlayAnimating] = useState(false);
+  const [localRecommendation, setLocalRecommendation] = useState(null);
+  const [showRecommendationShadow, setShowRecommendationShadow] = useState(false);
+  const recommendation = localRecommendation || state.recommendation;
   const legacyHandCards = GATES.map((gate, index) => ({ id: `legacy-${gate}-${index}`, gate, ...GATE_DETAILS[gate] }));
   const handCards = Array.isArray(state.hand_cards) ? state.hand_cards : legacyHandCards;
   const selectedCard = handCards.find((card) => card.id === selectedCardId) || handCards[0];
@@ -483,6 +624,10 @@ function CircuitGame({ state, onRefresh, onExit }) {
     state.gates.forEach((gate) => map.set(`${gate.qubit}_${gate.slot}`, gate));
     return map;
   }, [state.gates]);
+  const recommendationBySlot = useMemo(
+    () => buildRecommendationMap(showRecommendationShadow ? recommendation?.gates : []),
+    [showRecommendationShadow, recommendation],
+  );
   const stagedEvolutionGates = useMemo(() => {
     const activeGates = (state.gates || [])
       .slice()
@@ -503,6 +648,11 @@ function CircuitGame({ state, onRefresh, onExit }) {
   }, [state.phase, state.level_index]);
 
   useEffect(() => {
+    setLocalRecommendation(null);
+    setShowRecommendationShadow(false);
+  }, [state.level_index]);
+
+  useEffect(() => {
     if (!handCards.length) {
       setSelectedCardId(null);
       return;
@@ -514,6 +664,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
 
   const setGate = async (qubit, slot) => {
     if (!selectedCard) return;
+    setShowRecommendationShadow(false);
     const key = `${qubit}_${slot}`;
     const withoutSlot = state.gates.filter((gate) => `${gate.qubit}_${gate.slot}` !== key);
     const placement = { gate: selectedCard.gate, qubit, slot };
@@ -526,6 +677,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
   };
 
   const setGateByCard = async (card, qubit, slot) => {
+    setShowRecommendationShadow(false);
     const key = `${qubit}_${slot}`;
     const withoutSlot = state.gates.filter((gate) => `${gate.qubit}_${gate.slot}` !== key);
     const placement = { gate: card.gate, qubit, slot };
@@ -553,6 +705,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
   };
 
   const removeGate = async (qubit, slot) => {
+    setShowRecommendationShadow(false);
     await api("/circuit/stage", {
       method: "POST",
       body: JSON.stringify({
@@ -563,8 +716,23 @@ function CircuitGame({ state, onRefresh, onExit }) {
   };
 
   const action = async (path) => {
+    setShowRecommendationShadow(false);
     await api(path, { method: "POST" });
     await onRefresh();
+  };
+
+  const recommendCircuit = async () => {
+    const fallback = localCircuitRecommendation(state);
+    setLocalRecommendation(fallback);
+    setShowRecommendationShadow(true);
+    try {
+      const nextState = await api("/circuit/recommend", { method: "POST" });
+      if (nextState?.recommendation) setLocalRecommendation(normalizeRecommendation(nextState.recommendation));
+      setShowRecommendationShadow(true);
+      await onRefresh();
+    } catch (err) {
+      console.warn("Circuit recommendation fallback used", err);
+    }
   };
 
   const playCircuitHand = async () => {
@@ -623,7 +791,15 @@ function CircuitGame({ state, onRefresh, onExit }) {
           </div>
         </div>
       )}
-      <TopBar onExit={onExit} onRules={() => setShowRules(true)} />
+      <TopBar
+        onExit={onExit}
+        onRules={() => setShowRules(true)}
+        onTutorial={() => {
+          window.localStorage.removeItem(CIRCUIT_TUTORIAL_STORAGE_KEY);
+          setTutorialStep(0);
+          setShowTutorialLocal(true);
+        }}
+      />
       <header className="hud">
         <div>
           <h2>Quantum Hacker</h2>
@@ -636,6 +812,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
           <span>出手机会 {state.hands_left}</span>
           <span>资金 ${state.money}</span>
           <span>牌库 {state.deck_count} / 弃牌 {state.discard_count}</span>
+          <span className={recommendation?.used ? "stat-used" : ""}>推荐 {recommendation?.used ? 1 : 0}/1</span>
         </div>
       </header>
 
@@ -661,6 +838,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
                 <button
                   key={card.id}
                   className={`gate-card gate-card-${card.gate.toLowerCase()} ${selectedCard?.id === card.id ? "active" : ""}`}
+                  data-usage={gateUsage(card.gate)}
                   onClick={() => setSelectedCardId(card.id)}
                   draggable
                   onDragStart={(event) => startGateDrag(event, card)}
@@ -682,16 +860,17 @@ function CircuitGame({ state, onRefresh, onExit }) {
               <div className="slots-container">
                 {[0, 1, 2, 3].map((slot) => {
                   const gate = gatesBySlot.get(`${qubit}_${slot}`);
+                  const recommendedGate = !gate ? recommendationBySlot.get(`${qubit}_${slot}`) : null;
                   return (
                     <button
                       key={slot}
-                      className={`circuit-slot ${gate ? "occupied" : ""}`}
+                      className={`circuit-slot ${gate ? "occupied" : ""} ${recommendedGate ? "recommended-slot" : ""}`}
                       onClick={() => (gate ? removeGate(qubit, slot) : setGate(qubit, slot))}
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => dropGate(event, qubit, slot)}
                       title={gate ? "点击收回手牌" : selectedCard ? `放置 ${selectedCard.gate}` : "还没有选牌"}
                     >
-                      {gate?.gate || "+"}
+                      {gate?.gate || (recommendedGate ? <span className="shadow-gate">{recommendedGate.gate === "KEEP" ? "空" : recommendedGate.gate}</span> : "+")}
                     </button>
                   );
                 })}
@@ -710,6 +889,13 @@ function CircuitGame({ state, onRefresh, onExit }) {
           <CircuitScoreBreakdown state={state} />
           {state.stored_mult > 1 && <div className="notice">已保存倍率 x{state.stored_mult}</div>}
           {state.warning && <div className="warning">{state.warning}</div>}
+          <button
+            className="btn btn-recommend"
+            onClick={recommendCircuit}
+            disabled={recommendation?.used}
+          >
+            {recommendation?.used ? "影子线路已显示" : "推荐出牌"}
+          </button>
           <button className="btn btn-observe" onClick={() => action("/circuit/observe")}>观察</button>
           <button className="btn btn-play-hand" onClick={playCircuitHand}>结算本手</button>
           <button className="btn btn-clear" onClick={() => action("/circuit/clear")}>清空线路</button>
@@ -883,6 +1069,9 @@ function CardGame({ state, onRefresh, onExit }) {
   const [showTutorialLocal, setShowTutorialLocal] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [playAnimating, setPlayAnimating] = useState(false);
+  const [localRecommendation, setLocalRecommendation] = useState(null);
+  const [showRecommendationShadow, setShowRecommendationShadow] = useState(false);
+  const recommendation = localRecommendation || state.recommendation;
 
   useEffect(() => {
     setSelectedCardIds([]);
@@ -893,6 +1082,11 @@ function CardGame({ state, onRefresh, onExit }) {
     }
   }, [state.phase, state.hand_cards.length, state.current_score, state.plays_left, state.discards_left, state.show_tutorial]);
 
+  useEffect(() => {
+    setLocalRecommendation(null);
+    setShowRecommendationShadow(false);
+  }, [state.ante, state.blind_index]);
+
   const tutorial = CARD_TUTORIAL_STEPS[tutorialStep] || CARD_TUTORIAL_STEPS[0];
 
   const visibleStagedCards = useMemo(() => {
@@ -900,6 +1094,10 @@ function CardGame({ state, onRefresh, onExit }) {
       Object.entries(stagedCards).filter((entry) => state.hand_cards[entry[1].cardIndex]),
     );
   }, [stagedCards, state.hand_cards]);
+  const recommendationBySlot = useMemo(
+    () => buildRecommendationMap(showRecommendationShadow ? recommendation?.gates : []),
+    [showRecommendationShadow, recommendation],
+  );
   const stagedEvolutionGates = useMemo(() => {
     const pairs = Object.entries(visibleStagedCards);
     if (pairs.length) {
@@ -915,6 +1113,7 @@ function CardGame({ state, onRefresh, onExit }) {
   }, [visibleStagedCards, state.hand_cards, state.last_recap]);
 
   const stageCard = (cardIndex, qubit, slot) => {
+    setShowRecommendationShadow(false);
     setStagedCards((current) => {
       const card = state.hand_cards[cardIndex];
       const next = Object.fromEntries(
@@ -929,6 +1128,7 @@ function CardGame({ state, onRefresh, onExit }) {
   };
 
   const setControlledTarget = (qubit, slot, target) => {
+    setShowRecommendationShadow(false);
     const key = `${qubit}_${slot}`;
     setStagedCards((current) => {
       const staged = current[key];
@@ -944,6 +1144,7 @@ function CardGame({ state, onRefresh, onExit }) {
   };
 
   const unstageSlot = (qubit, slot) => {
+    setShowRecommendationShadow(false);
     setStagedCards((current) => {
       const next = { ...current };
       delete next[`${qubit}_${slot}`];
@@ -971,6 +1172,7 @@ function CardGame({ state, onRefresh, onExit }) {
   const playHand = async () => {
     const pairs = Object.entries(visibleStagedCards);
     if (!pairs.length) return;
+    setShowRecommendationShadow(false);
     pairs.sort((a, b) => Number(a[0].split("_")[1]) - Number(b[0].split("_")[1]));
     setPlayAnimating(true);
     window.setTimeout(() => setPlayAnimating(false), 920);
@@ -986,13 +1188,29 @@ function CardGame({ state, onRefresh, onExit }) {
 
   const discard = async () => {
     if (!selectedCardIds.length) return;
+    setShowRecommendationShadow(false);
     await api("/discard", { method: "POST", body: JSON.stringify(selectedCardIds) });
     await onRefresh();
   };
 
   const action = async (path) => {
+    setShowRecommendationShadow(false);
     await api(path, { method: "POST" });
     await onRefresh();
+  };
+
+  const recommendCards = async () => {
+    const fallback = localCardRecommendation(state);
+    setLocalRecommendation(fallback);
+    setShowRecommendationShadow(true);
+    try {
+      const result = await api("/cards/recommend", { method: "POST" });
+      if (result?.recommendation) setLocalRecommendation(normalizeRecommendation(result.recommendation));
+      setShowRecommendationShadow(true);
+      await onRefresh();
+    } catch (err) {
+      console.warn("Card recommendation fallback used", err);
+    }
   };
 
   const finishTutorial = async () => {
@@ -1023,6 +1241,10 @@ function CardGame({ state, onRefresh, onExit }) {
 
   if (state.phase === "OPENING_PACK") {
     return <PackOpening state={state} onAction={action} onExit={onExit} onRules={() => setShowRules(true)} />;
+  }
+
+  if (state.phase === "OPENING_JOKER_PACK") {
+    return <JokerPackOpening state={state} onAction={action} onExit={onExit} onRules={() => setShowRules(true)} />;
   }
 
   return (
@@ -1062,6 +1284,7 @@ function CardGame({ state, onRefresh, onExit }) {
           <span>分数 {state.current_score} / {state.target_score}</span>
           <span>出手 {state.plays_left}</span>
           <span>弃牌 {state.discards_left}</span>
+          <span className={recommendation?.used ? "stat-used" : ""}>推荐 {recommendation?.used ? 1 : 0}/1</span>
         </div>
       </header>
 
@@ -1086,13 +1309,14 @@ function CardGame({ state, onRefresh, onExit }) {
                   const staged = visibleStagedCards[`${qubit}_${slot}`];
                   const stagedCardIdx = staged?.cardIndex;
                   const card = state.hand_cards[stagedCardIdx];
+                  const recommendedGate = !card ? recommendationBySlot.get(`${qubit}_${slot}`) : null;
                   const isControlled = CONTROLLED_GATES.has(card?.gate);
                   const targetQubit = staged?.targets?.[1] ?? (qubit + 1) % state.num_qubits;
                   const targetOffset = targetQubit - qubit;
                   return (
                     <div
                       key={slot}
-                      className={`circuit-slot ${card ? "occupied draggable-card-slot" : ""} ${isControlled ? "controlled-gate" : ""}`}
+                      className={`circuit-slot ${card ? "occupied draggable-card-slot" : ""} ${isControlled ? "controlled-gate" : ""} ${recommendedGate ? "recommended-slot" : ""}`}
                       draggable={Boolean(card)}
                       onDragStart={(event) => card && startCardDrag(event, stagedCardIdx, "stage")}
                       onDragEnd={() => setDraggingCardId(null)}
@@ -1108,7 +1332,7 @@ function CardGame({ state, onRefresh, onExit }) {
                           aria-hidden="true"
                         />
                       )}
-                      {card?.gate || "+"}
+                      {card?.gate || (recommendedGate ? <span className="shadow-gate">{recommendedGate.gate === "KEEP" ? "空" : recommendedGate.gate}</span> : "+")}
                       {isControlled && (
                         <label className="target-picker" onClick={(event) => event.stopPropagation()}>
                           <span>到</span>
@@ -1142,6 +1366,15 @@ function CardGame({ state, onRefresh, onExit }) {
             </div>
           ))}
           </div>
+          <CardHandArea
+            state={state}
+            visibleStagedCards={visibleStagedCards}
+            selectedCardIds={selectedCardIds}
+            draggingCardId={draggingCardId}
+            startCardDrag={startCardDrag}
+            setDraggingCardId={setDraggingCardId}
+            setSelectedCardIds={setSelectedCardIds}
+          />
         </div>
 
         <aside className="control-panel">
@@ -1151,6 +1384,13 @@ function CardGame({ state, onRefresh, onExit }) {
           </div>
           <CardScoreBreakdown breakdown={state.last_score_breakdown} />
           <StateEvolutionTimeline gates={stagedEvolutionGates} qubits={state.num_qubits} />
+          <button
+            className="btn btn-recommend"
+            onClick={recommendCards}
+            disabled={recommendation?.used}
+          >
+            {recommendation?.used ? "影子线路已显示" : "推荐出牌"}
+          </button>
           <button className="btn btn-play-hand" onClick={playHand} disabled={!Object.keys(visibleStagedCards).length}>
             结算本手
           </button>
@@ -1226,6 +1466,56 @@ function CardGame({ state, onRefresh, onExit }) {
   );
 }
 
+function CardHandArea({
+  state,
+  visibleStagedCards,
+  selectedCardIds,
+  draggingCardId,
+  startCardDrag,
+  setDraggingCardId,
+  setSelectedCardIds,
+}) {
+  return (
+    <section className="hand-area board-hand-area">
+      <h3>手牌</h3>
+      {state.phase !== "PLAYING" && (
+        <p className="empty-hand-note">
+          {state.phase === "REWARD"
+            ? "关卡已完成。刚才的手牌已经结算并进入弃牌堆。"
+            : "当前已经不在出牌阶段。"}
+        </p>
+      )}
+      <div className="cards-container">
+        {state.hand_cards.map((card, index) => {
+          if (Object.values(visibleStagedCards).some((item) => item.cardIndex === index)) return null;
+          const selected = selectedCardIds.includes(index);
+          return (
+            <button
+              key={card.id}
+              className={`q-card rarity-${card.rarity} ${selected ? "selected" : ""}`}
+              data-usage={gateUsage(card.gate)}
+              draggable
+              onDragStart={(event) => startCardDrag(event, index)}
+              onDragEnd={() => setDraggingCardId(null)}
+              onClick={() =>
+                draggingCardId === index
+                  ? undefined
+                  : setSelectedCardIds((current) =>
+                      current.includes(index) ? current.filter((id) => id !== index) : [...current, index],
+                    )
+              }
+            >
+              <strong>{card.gate}</strong>
+              <span>{card.name}</span>
+              {card.targets > 1 && <small>{card.targets}-qubit</small>}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function CardShop({ state, onAction, onExit, onRules }) {
   return (
     <main className="board-screen">
@@ -1292,6 +1582,24 @@ function CardShop({ state, onAction, onExit, onRules }) {
             <p className="empty-hand-note">卡包已售罄。</p>
           )}
 
+          {state.shop_joker_pack ? (
+            <article className="shop-card pack-shop-card joker-pack-shop-card">
+              <span className="shop-type">JOKER PACK</span>
+              <h4>{state.shop_joker_pack.name}</h4>
+              <p>{state.shop_joker_pack.desc || "打开后随机出现两张 Joker，选择一张加入你的流派。"}</p>
+              <strong>${state.shop_joker_pack.cost}</strong>
+              <button
+                className="btn btn-observe"
+                onClick={() => onAction("/cards/buy-joker-pack")}
+                disabled={state.chips < state.shop_joker_pack.cost || state.jokers.length >= 5}
+              >
+                购买小丑包
+              </button>
+            </article>
+          ) : (
+            <p className="empty-hand-note">小丑包已售罄。</p>
+          )}
+
           <div className="owned-jokers">
             <h3>已拥有 Joker</h3>
             {state.jokers.map((joker, index) => (
@@ -1307,6 +1615,79 @@ function CardShop({ state, onAction, onExit, onRules }) {
             下一关
           </button>
         </aside>
+      </section>
+    </main>
+  );
+}
+
+function JokerPackOpening({ state, onAction, onExit, onRules }) {
+  const choices = state.opened_joker_choices || [];
+  const [revealStep, setRevealStep] = useState("sealed");
+  const revealTimer = useRef(null);
+
+  useEffect(() => {
+    setRevealStep("sealed");
+    if (revealTimer.current) {
+      window.clearTimeout(revealTimer.current);
+      revealTimer.current = null;
+    }
+    return () => {
+      if (revealTimer.current) {
+        window.clearTimeout(revealTimer.current);
+      }
+    };
+  }, [choices.map((joker) => joker.name).join("|")]);
+
+  const openPack = () => {
+    setRevealStep("opening");
+    revealTimer.current = window.setTimeout(() => setRevealStep("revealed"), 1450);
+  };
+
+  return (
+    <main className="board-screen pack-screen">
+      <TopBar onExit={onExit} onRules={onRules} />
+      <section className="pack-stage joker-pack-stage">
+        <h2>Joker 卡包</h2>
+        <div className={`pack-opening joker-pack-opening ${revealStep}`}>
+          <div className="pack-shell joker-pack-shell" aria-hidden={revealStep === "revealed"}>
+            <div className="pack-core">
+              <span>QUANTUM</span>
+              <strong>JOKER</strong>
+              <small>BUILD SERIES</small>
+            </div>
+            <div className="pack-rip pack-rip-left" />
+            <div className="pack-rip pack-rip-right" />
+            <div className="pack-glow" />
+          </div>
+          <div className="joker-pack-reveal" aria-hidden={revealStep !== "revealed"}>
+            {choices.map((joker) => (
+              <button
+                key={`${joker.name}-${joker.index}`}
+                className="shop-card joker-choice-card pack-reveal"
+                onClick={() => onAction(`/cards/collect-joker-pack/${joker.index}`)}
+                disabled={revealStep !== "revealed"}
+              >
+                <span className="shop-type">JOKER</span>
+                <span className="archetype-badge">{joker.archetype || jokerArchetype(joker)}</span>
+                <h4>{joker.name}</h4>
+                <p>{joker.desc}</p>
+                <small>{joker.synergy || BUILD_ARCHETYPES[jokerArchetype(joker)]?.hint}</small>
+                <strong>选择这张</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+        {revealStep === "sealed" ? (
+          <button className="btn btn-observe" onClick={openPack} disabled={!choices.length}>
+            打开小丑包
+          </button>
+        ) : revealStep === "opening" ? (
+          <button className="btn btn-clear" disabled>
+            打开中...
+          </button>
+        ) : (
+          <p className="empty-hand-note">选择一张 Joker 加入当前流派。</p>
+        )}
       </section>
     </main>
   );
@@ -1570,6 +1951,17 @@ function BonusObjectivePanel({ objective, rewardUnit = "奖励" }) {
       </div>
       <p>{displayObjective.desc}</p>
       <small>奖励：+{objective.reward || 0} {rewardUnit}</small>
+    </div>
+  );
+}
+
+function RecommendationPanel({ recommendation }) {
+  if (!recommendation?.text) return null;
+
+  return (
+    <div className="recommendation-card">
+      <span className="formula-label">推荐出牌</span>
+      <p>{recommendation.text}</p>
     </div>
   );
 }
@@ -1959,11 +2351,12 @@ function CardRulesPage({ onBack, onExit }) {
   );
 }
 
-function TopBar({ onExit, onRules }) {
+function TopBar({ onExit, onRules, onTutorial }) {
   return (
     <div className="top-controls">
       <button className="btn-back" onClick={onExit}>返回大厅</button>
       {onRules && <button className="btn-back" onClick={onRules}>规则</button>}
+      {onTutorial && <button className="btn-back" onClick={onTutorial}>新手教程</button>}
     </div>
   );
 }

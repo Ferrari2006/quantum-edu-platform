@@ -1,4 +1,6 @@
 .quantum-game {
+  position: relative;
+  isolation: isolate;
   min-height: calc(100vh - 72px);
   padding: clamp(16px, 1.6vw, 32px);
   background:
@@ -6,6 +8,42 @@
     repeating-linear-gradient(90deg, rgba(110, 231, 249, 0.04) 0 1px, transparent 1px 96px);
   color: #eef2ff;
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+.quantum-game > :not(.quantum-balatro-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+
+.quantum-balatro-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #070b12;
+  pointer-events: none;
+  opacity: 0.78;
+  mix-blend-mode: screen;
+}
+
+.quantum-game::after {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(103, 232, 249, 0.11), transparent 26%),
+    linear-gradient(180deg, rgba(5, 8, 18, 0.38), rgba(5, 8, 18, 0.82));
+  content: "";
+  pointer-events: none;
+}
+
+.game-loading {
+  display: grid;
+  min-height: 58vh;
+  place-items: center;
+  color: #9be7ff;
+  font-weight: 900;
 }
 
 .selection-screen {
@@ -380,6 +418,12 @@
   font-size: 14px;
 }
 
+.stats span.stat-used {
+  border-color: #475569;
+  background: #1f2937;
+  color: #94a3b8;
+}
+
 .progress-meter {
   display: grid;
   grid-template-columns: minmax(180px, 300px) auto;
@@ -424,6 +468,49 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
 }
 
+.main-layout + .hand-area {
+  display: none;
+}
+
+.board-hand-area {
+  margin-top: 16px;
+  border: 0;
+  border-top: 1px solid #2f3d50;
+  border-radius: 0;
+  padding: 14px 0 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.board-hand-area h3 {
+  margin: 0 0 12px;
+}
+
+.board-hand-area .cards-container {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.board-hand-area .q-card {
+  min-height: 132px;
+  gap: 8px;
+  padding: 10px 6px;
+}
+
+.board-hand-area .q-card strong {
+  font-size: 28px;
+}
+
+.board-hand-area .q-card span {
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.board-hand-area .q-card small {
+  font-size: 10px;
+}
+
 .side-panel {
   display: flex;
   flex-direction: column;
@@ -453,8 +540,8 @@
 
 .gate-palette {
   display: grid;
-  grid-template-columns: repeat(4, minmax(116px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .circuit-card-hand {
@@ -462,14 +549,15 @@
 }
 
 .gate-palette button {
+  position: relative;
   display: grid;
-  min-height: 154px;
+  min-height: 132px;
   align-content: center;
   justify-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 2px solid #3b4a60;
   border-radius: 8px;
-  padding: 14px 10px;
+  padding: 11px 8px;
   background: linear-gradient(180deg, #182236, #111927);
   color: #dbeafe;
   cursor: pointer;
@@ -495,16 +583,16 @@
 .gate-card-role {
   border: 1px solid rgba(155, 231, 255, 0.36);
   border-radius: 999px;
-  padding: 4px 7px;
+  padding: 3px 6px;
   color: #9be7ff;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .gate-card strong {
   color: #eef2ff;
-  font-size: 34px;
+  font-size: 30px;
   line-height: 1;
 }
 
@@ -514,9 +602,9 @@
 }
 
 .gate-card small {
-  max-width: 130px;
+  max-width: 118px;
   color: #95a3b8;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -608,6 +696,34 @@
   background: #241a33;
   color: #e9d5ff;
   box-shadow: inset 0 -3px 0 rgba(192, 132, 252, 0.28);
+}
+
+.circuit-slot.recommended-slot {
+  border-color: #facc15;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(250, 204, 21, 0.08),
+      rgba(250, 204, 21, 0.08) 8px,
+      transparent 8px,
+      transparent 16px
+    ),
+    #101722;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.28), 0 0 18px rgba(250, 204, 21, 0.12);
+}
+
+.shadow-gate {
+  display: inline-grid;
+  min-width: 54px;
+  place-items: center;
+  border: 1px solid rgba(250, 204, 21, 0.72);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #fde68a;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .controlled-gate {
@@ -893,6 +1009,17 @@
   background: #dc2626;
 }
 
+.btn-recommend {
+  background: #0ea5e9;
+  color: #06131c;
+}
+
+.btn-recommend:disabled {
+  background: #0ea5e9;
+  color: #06131c;
+  opacity: 0.68;
+}
+
 .btn-clear {
   background: #475569;
 }
@@ -911,6 +1038,26 @@
   border-radius: 8px;
   padding: 14px;
   background: #101722;
+}
+
+.recommendation-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #2f6f8e;
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.14), transparent 44%),
+    #0b1623;
+  text-align: left;
+  box-shadow: inset 0 3px 0 rgba(14, 165, 233, 0.14);
+}
+
+.recommendation-card p {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .score-breakdown h3 {
@@ -1159,6 +1306,7 @@
 }
 
 .q-card {
+  position: relative;
   display: flex;
   width: 100%;
   min-height: 158px;
@@ -1175,6 +1323,54 @@
   user-select: none;
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.2);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.gate-card[data-usage]::before,
+.q-card[data-usage]::before {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 30;
+  border: 1px solid #4b6b88;
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(7, 17, 29, 0.96);
+  color: #dbeafe;
+  content: attr(data-usage);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transform: translateY(8px);
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+}
+
+.gate-card[data-usage]::after,
+.q-card[data-usage]::after {
+  display: none;
+}
+
+.gate-card[data-usage]:hover::before,
+.gate-card[data-usage]:focus-visible::before,
+.gate-card[data-usage]:hover::after,
+.gate-card[data-usage]:focus-visible::after,
+.q-card[data-usage]:hover::before,
+.q-card[data-usage]:focus-visible::before,
+.q-card[data-usage]:hover::after,
+.q-card[data-usage]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.gate-card[data-usage]:hover::after,
+.gate-card[data-usage]:focus-visible::after,
+.q-card[data-usage]:hover::after,
+.q-card[data-usage]:focus-visible::after {
+  transform: translateY(0);
 }
 
 .q-card:hover {
@@ -1983,6 +2179,13 @@
   border-color: #0e7490;
 }
 
+.joker-pack-shop-card {
+  border-color: #a855f7;
+  background:
+    linear-gradient(135deg, rgba(168, 85, 247, 0.14), transparent 46%),
+    #101722;
+}
+
 .shop-side {
   display: flex;
   flex-direction: column;
@@ -2169,6 +2372,61 @@
   animation: card-reveal 0.58s cubic-bezier(0.16, 0.78, 0.28, 1) both;
 }
 
+.joker-pack-stage {
+  min-height: 680px;
+}
+
+.joker-pack-opening {
+  width: min(650px, 92vw);
+  min-height: 430px;
+}
+
+.joker-pack-shell {
+  border-color: #c084fc;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.18), transparent 38%),
+    linear-gradient(180deg, #241638, #111827);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.38), inset 0 0 42px rgba(168, 85, 247, 0.32);
+}
+
+.joker-pack-reveal {
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 18px;
+  width: min(620px, 90vw);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px) scale(0.95);
+}
+
+.pack-opening.revealed .joker-pack-reveal {
+  animation: joker-choice-reveal 0.62s cubic-bezier(0.16, 0.78, 0.28, 1) both;
+  pointer-events: auto;
+}
+
+.joker-pack-reveal .pack-reveal {
+  grid-area: auto;
+  width: 100%;
+  min-height: 320px;
+  opacity: 1;
+  transform: none;
+}
+
+.joker-choice-card {
+  cursor: pointer;
+  text-align: left;
+}
+
+.joker-choice-card strong {
+  margin-top: auto;
+}
+
+.joker-choice-card:hover:not(:disabled) {
+  border-color: #facc15;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.3), inset 0 3px 0 rgba(250, 204, 21, 0.22);
+}
+
 .pack-reveal small {
   color: #111827;
   font-weight: 800;
@@ -2239,10 +2497,26 @@
   }
 }
 
+@keyframes joker-choice-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pack-opening.opening .pack-shell,
   .pack-opening.opening .pack-rip,
   .pack-opening.revealed .pack-reveal,
+  .pack-opening.revealed .joker-pack-reveal,
   .tutorial-step-hand .hand-area,
   .tutorial-step-stage .circuit-board,
   .tutorial-step-control .circuit-board,
@@ -2373,8 +2647,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .board-hand-area .cards-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .gate-palette {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .q-card {

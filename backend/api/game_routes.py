@@ -241,6 +241,9 @@ class CircuitGameSession:
         self.bonus_reward_claimed = False
         self.last_hand_score = 0
         self.score_climb_streak = 0
+        self.recommendation_used = False
+        self.recommendation_text = ""
+        self.recommendation_gates: list[dict[str, Any]] = []
         self.phase = "PLAYING"
         self.warning = ""
         self.last_roulette: dict[str, str] | None = None
@@ -273,6 +276,7 @@ class CircuitGameSession:
         self.ensure_card_pool()
         self.ensure_blind_event()
         self.ensure_bonus_objective()
+        self.ensure_recommendation()
         level = self.level()
         probs = self.probabilities()
         chips, mult = calculate_score(
@@ -325,6 +329,11 @@ class CircuitGameSession:
                 "complete": self.bonus_complete,
                 "claimed": self.bonus_reward_claimed,
             },
+            "recommendation": {
+                "used": self.recommendation_used,
+                "text": self.recommendation_text,
+                "gates": self.recommendation_gates,
+            },
             "shop_jokers": self.shop_jokers,
             "owned_jokers": self.owned_jokers,
             "active_jokers": self.active_jokers,
@@ -368,6 +377,48 @@ class CircuitGameSession:
             self.last_hand_score = 0
         if not hasattr(self, "score_climb_streak"):
             self.score_climb_streak = 0
+
+    def ensure_recommendation(self) -> None:
+        if not hasattr(self, "recommendation_used"):
+            self.recommendation_used = False
+        if not hasattr(self, "recommendation_text"):
+            self.recommendation_text = ""
+        if not hasattr(self, "recommendation_gates"):
+            self.recommendation_gates = []
+
+    def recommend_play(self) -> dict[str, Any]:
+        self.ensure_recommendation()
+        if self.phase != "PLAYING":
+            return {"text": self.recommendation_text, "gates": self.recommendation_gates}
+        if self.recommendation_used:
+            return {"text": self.recommendation_text, "gates": self.recommendation_gates}
+
+        targets = self.level()["target_probs"]
+        positive = {state: prob for state, prob in targets.items() if prob > 0.01}
+        gates: list[dict[str, Any]] = []
+        if set(positive) == {"00"}:
+            gates = [{"gate": "KEEP", "qubit": 0, "slot": 0}]
+            text = "目标只有 00：少放门，保持干净态。可以先不放门直接结算，或只放必要的 X/H。"
+        elif positive.get("00", 0) > 0 and positive.get("10", 0) > 0 and len(positive) <= 2:
+            gates = [{"gate": "H", "qubit": 0, "slot": 0}]
+            text = "想让 00 和 10 都出现：试试把 H 放在 q0，让第一条量子线进入叠加。"
+        elif positive.get("00", 0) > 0 and positive.get("11", 0) > 0:
+            gates = [
+                {"gate": "H", "qubit": 0, "slot": 0},
+                {"gate": "CNOT", "qubit": 0, "slot": 1},
+            ]
+            text = "想做出成对相关：先把 H 放在 q0，再把 CNOT 放在 q0，目标选另一条线。"
+        elif len(positive) >= 3:
+            gates = [{"gate": "H", "qubit": 0, "slot": 0}]
+            text = "目标分布比较分散：优先用 H 制造叠加，再用 X 或 CNOT 调整哪些结果更容易出现。"
+        else:
+            gates = [{"gate": "X", "qubit": 0, "slot": 0}]
+            text = "先找目标里最高的柱子：需要翻到 1 就用 X，需要拆成多个结果就用 H，需要相关性再接 CNOT。"
+
+        self.recommendation_used = True
+        self.recommendation_text = text
+        self.recommendation_gates = gates
+        return {"text": text, "gates": gates}
 
     def update_bonus_objective(
         self,
@@ -681,6 +732,9 @@ class CircuitGameSession:
         self.bonus_reward_claimed = False
         self.last_hand_score = 0
         self.score_climb_streak = 0
+        self.recommendation_used = False
+        self.recommendation_text = ""
+        self.recommendation_gates = []
         self.deck = []
         self.hand = []
         self.discard_pile = []
@@ -768,6 +822,8 @@ def get_game_state() -> dict[str, Any]:
         game.ensure_blind_event()
     if hasattr(game, "ensure_bonus_objective"):
         game.ensure_bonus_objective()
+    if hasattr(game, "ensure_recommendation"):
+        game.ensure_recommendation()
     return {
         "active": True,
         "kind": "cards",
@@ -794,6 +850,11 @@ def get_game_state() -> dict[str, Any]:
             **getattr(game, "bonus_objective", {}),
             "complete": getattr(game, "bonus_complete", False),
             "claimed": getattr(game, "bonus_reward_claimed", False),
+        },
+        "recommendation": {
+            "used": getattr(game, "recommendation_used", False),
+            "text": getattr(game, "recommendation_text", ""),
+            "gates": getattr(game, "recommendation_gates", []),
         },
         "last_recap": {
             "type": "fidelity",
@@ -841,6 +902,7 @@ def get_game_state() -> dict[str, Any]:
             for index, item in enumerate(getattr(game, "shop_jokers", []))
         ],
         "shop_pack": getattr(game, "shop_pack", False),
+        "shop_joker_pack": getattr(game, "shop_joker_pack", False),
         "opened_card": (
             {
                 "name": game.opened_card.name,
@@ -852,6 +914,13 @@ def get_game_state() -> dict[str, Any]:
             if getattr(game, "opened_card", None)
             else None
         ),
+        "opened_joker_choices": [
+            {
+                **serialize_card_joker(joker),
+                "index": index,
+            }
+            for index, joker in enumerate(getattr(game, "opened_joker_choices", []))
+        ],
         "lesson": getattr(game, "current_lesson", {}),
         "hand_catalog": getattr(game, "hand_catalog", []),
         "pack_catalog": getattr(game, "pack_catalog", []),
@@ -929,6 +998,13 @@ def play_circuit() -> dict[str, Any]:
     return session.serialize()
 
 
+@router.post("/circuit/recommend")
+def recommend_circuit_play() -> dict[str, Any]:
+    session = active_circuit_session()
+    session.recommend_play()
+    return session.serialize()
+
+
 @router.post("/circuit/next")
 def next_circuit_level() -> dict[str, Any]:
     session = active_circuit_session()
@@ -955,6 +1031,13 @@ def play_hand(req: CardPlayRequest) -> dict[str, Any]:
     game = active_card_game()
     success = game.play_hand(req.selected_indices, req.targets)
     return {"success": success, "new_score": game.current_score, "phase": game.phase}
+
+
+@router.post("/cards/recommend")
+def recommend_card_play() -> dict[str, Any]:
+    game = active_card_game()
+    recommendation = game.recommend_play()
+    return {"recommendation": recommendation}
 
 
 @router.post("/discard")
@@ -1017,6 +1100,25 @@ def buy_card_pack() -> dict[str, Any]:
     return {"phase": game.phase, "chips": game.chips}
 
 
+@router.post("/cards/buy-joker-pack")
+def buy_card_joker_pack() -> dict[str, Any]:
+    game = active_card_game()
+    if game.phase != "SHOP":
+        raise HTTPException(status_code=400, detail="Packs can only be bought in the shop")
+    if not getattr(game, "shop_joker_pack", False):
+        raise HTTPException(status_code=404, detail="No joker pack available")
+    if game.chips < game.shop_joker_pack["cost"]:
+        raise HTTPException(status_code=400, detail="Not enough chips")
+    if len(game.jokers) >= 5:
+        raise HTTPException(status_code=400, detail="Joker limit reached")
+
+    game.chips -= game.shop_joker_pack["cost"]
+    game.opened_joker_choices = game.create_joker_pack_choices()
+    game.shop_joker_pack = False
+    game.phase = "OPENING_JOKER_PACK"
+    return {"phase": game.phase, "chips": game.chips}
+
+
 @router.post("/cards/collect-pack")
 def collect_card_pack() -> dict[str, str]:
     game = active_card_game()
@@ -1024,4 +1126,21 @@ def collect_card_pack() -> dict[str, str]:
         game.deck.append(game.opened_card)
         game.opened_card = None
         game.phase = "SHOP"
+    return {"phase": game.phase}
+
+
+@router.post("/cards/collect-joker-pack/{choice_index}")
+def collect_card_joker_pack(choice_index: int) -> dict[str, str]:
+    game = active_card_game()
+    choices = getattr(game, "opened_joker_choices", [])
+    if game.phase != "OPENING_JOKER_PACK" or not choices:
+        raise HTTPException(status_code=400, detail="No joker pack is open")
+    if choice_index < 0 or choice_index >= len(choices):
+        raise HTTPException(status_code=404, detail="Joker choice not found")
+    if len(game.jokers) >= 5:
+        raise HTTPException(status_code=400, detail="Joker limit reached")
+
+    game.jokers.append(choices[choice_index])
+    game.opened_joker_choices = []
+    game.phase = "SHOP"
     return {"phase": game.phase}

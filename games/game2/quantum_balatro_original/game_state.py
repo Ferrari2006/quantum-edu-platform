@@ -181,6 +181,9 @@ class GameState:
         # --- 商店与结算记录 ---
         self.shop_jokers = []  
         self.shop_pack = False 
+        self.shop_joker_pack = False
+        self.opened_card = None
+        self.opened_joker_choices = []
         self.last_payout = {'base': 0, 'plays': 0, 'total': 0}
         self.last_score_breakdown = {
             'hand': 'None',
@@ -213,6 +216,9 @@ class GameState:
         self.bonus_reward_claimed = False
         self.last_hand_score_value = 0
         self.score_climb_streak = 0
+        self.recommendation_used = False
+        self.recommendation_text = ""
+        self.recommendation_gates = []
         
         # --- 量子牌型定义 (Base Chips x Base Mult) ---
         self.poker_hands = {
@@ -281,6 +287,9 @@ class GameState:
         self.bonus_reward_claimed = False
         self.last_hand_score_value = 0
         self.score_climb_streak = 0
+        self.recommendation_used = False
+        self.recommendation_text = ""
+        self.recommendation_gates = []
         if self.backend: self.backend.upgrade_qubits(3)
         self.start_new_blind()
 
@@ -312,6 +321,48 @@ class GameState:
             self.last_hand_score_value = 0
         if not hasattr(self, "score_climb_streak"):
             self.score_climb_streak = 0
+
+    def ensure_recommendation(self):
+        if not hasattr(self, "recommendation_used"):
+            self.recommendation_used = False
+        if not hasattr(self, "recommendation_text"):
+            self.recommendation_text = ""
+        if not hasattr(self, "recommendation_gates"):
+            self.recommendation_gates = []
+
+    def recommend_play(self):
+        self.ensure_recommendation()
+        if self.phase != 'PLAYING':
+            return {"text": self.recommendation_text, "gates": self.recommendation_gates}
+        if self.recommendation_used:
+            return {"text": self.recommendation_text, "gates": self.recommendation_gates}
+
+        gates = [card.gate_type for card in self.hand]
+        shadow_gates = []
+        if "H" in gates and "CNOT" in gates:
+            shadow_gates = [
+                {"gate": "H", "qubit": 0, "slot": 0},
+                {"gate": "CNOT", "qubit": 0, "slot": 1, "targets": [0, 1]},
+            ]
+            text = "想触发 Bell Pair：先把 H 放进 q0 的前面插槽，再把 CNOT 放在后面，让它控制另一条线。"
+        elif "H" in gates:
+            shadow_gates = [{"gate": "H", "qubit": 0, "slot": 0}]
+            text = "想让多个测量结果出现：先把 H 放在 q0。它会把确定态拆成叠加态。"
+        elif any(gate in gates for gate in ["Z", "CZ", "RZ"]):
+            gate = next(gate for gate in ["Z", "CZ", "RZ"] if gate in gates)
+            shadow_gates = [{"gate": gate, "qubit": 0, "slot": 0}]
+            text = "手里有相位门：如果有相位事件或 Phase 牌型目标，可以先放 Z/CZ/RZ 争取额外奖励。"
+        elif "X" in gates:
+            shadow_gates = [{"gate": "X", "qubit": 0, "slot": 0}]
+            text = "目标需要出现 1 时：把 X 放在对应量子比特上，它会把 |0> 翻成 |1>。"
+        else:
+            shadow_gates = [{"gate": "KEEP", "qubit": 0, "slot": 0}]
+            text = "这手先保守：少放牌、保持线路干净，等抽到 H 或 CNOT 再做更强牌型。"
+
+        self.recommendation_used = True
+        self.recommendation_text = text
+        self.recommendation_gates = shadow_gates
+        return {"text": text, "gates": shadow_gates}
 
     def update_bonus_objective(self, gate_types, hand_name, fidelity, hand_score, cleared):
         self.ensure_bonus_objective()
@@ -397,6 +448,9 @@ class GameState:
         self.bonus_reward_claimed = False
         self.last_hand_score_value = 0
         self.score_climb_streak = 0
+        self.recommendation_used = False
+        self.recommendation_text = ""
+        self.recommendation_gates = []
         self.last_score_breakdown = {
             'hand': 'None',
             'base_chips': 0,
@@ -684,6 +738,26 @@ class GameState:
         self.shop_jokers = [{"item": j, "cost": 8} for j in random.sample(available_jokers, random.randint(1, 2))]
         pack = random.choice(self.pack_catalog)
         self.shop_pack = {"name": pack["name"], "type": pack["type"], "desc": pack["desc"], "cost": 4}
+        self.shop_joker_pack = {
+            "name": "Joker Pack",
+            "type": "joker",
+            "desc": "Open to reveal two random Jokers. Pick one to add to your build.",
+            "cost": 8,
+        }
+
+    def create_joker_pack_choices(self):
+        pool = [
+            MaxwellDemonJoker(),
+            SchrodingerCatJoker(),
+            PhaseKickbackJoker(),
+            RotationCompilerJoker(),
+            TopologyBonusJoker(),
+        ]
+        owned_names = {joker.name for joker in self.jokers}
+        fresh_pool = [joker for joker in pool if joker.name not in owned_names]
+        if len(fresh_pool) < 2:
+            fresh_pool = pool
+        return random.sample(fresh_pool, min(2, len(fresh_pool)))
 
     def create_pack_card(self, pack_type):
         pools = {
