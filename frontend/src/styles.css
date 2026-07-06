@@ -105,3 +105,184 @@ body {
   overflow: auto;
   min-height: 220px;
 }
+
+.qa-page,
+.qa-result,
+.qa-section,
+.qa-details,
+.qa-context,
+.qa-answer {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.qa-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+
+.qa-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #1f2937;
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.qa-button {
+  border: 1px solid #1f2937;
+  background: #111827;
+  color: #e5e7eb;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.qa-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.qa-result {
+  border: 1px solid #1f2937;
+  background: #0b1220;
+  border-radius: 12px;
+  padding: 18px;
+  min-height: 220px;
+  overflow-x: hidden;
+}
+
+.qa-section + .qa-section,
+.qa-section + .qa-details {
+  margin-top: 18px;
+}
+
+.qa-section-kicker {
+  display: inline-flex;
+  margin-bottom: 8px;
+  border: 1px solid #263244;
+  background: #111827;
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.qa-section h2,
+.qa-details summary {
+  margin: 0 0 10px;
+  color: #f8fafc;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.qa-answer,
+.qa-context p,
+.qa-empty,
+.qa-error,
+.pre {
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.pre {
+  max-width: 100%;
+}
+
+.qa-answer {
+  color: #e5e7eb;
+}
+
+.qa-empty {
+  color: #94a3b8;
+}
+
+.qa-error {
+  margin-bottom: 12px;
+  border: 1px solid #7f1d1d;
+  background: #2f1111;
+  color: #fecaca;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.qa-citations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.qa-citation,
+.qa-context {
+  border: 1px solid #1f2937;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.qa-citation-title,
+.qa-context-head {
+  color: #f8fafc;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.qa-citation-meta,
+.qa-context-head span:last-child {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.qa-details {
+  margin-top: 18px;
+}
+
+.qa-details summary {
+  cursor: pointer;
+}
+
+.qa-context-list {
+  display: grid;
+  gap: 10px;
+}
+
+.qa-context-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.qa-context p {
+  margin: 0;
+  color: #cbd5e1;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 14px;
+  }
+
+  .qa-form {
+    flex-direction: column;
+  }
+
+  .qa-button {
+    width: 100%;
+  }
+
+  .qa-result {
+    padding: 14px;
+  }
+}
