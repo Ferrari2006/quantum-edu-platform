@@ -88,24 +88,50 @@ def check_boss_constraints(gate_sequence, boss_type, active_jokers):
         return False, f"SPARSE MEMORY: Max {max_gates} staged gates."
     return True, ""
 
-def calculate_score(probs, target_probs, gate_sequence, active_jokers):
-    base_chips = 0
-    for state, target_p in target_probs.items():
-        base_chips += min(probs.get(state, 0), target_p) * 200
-        
+def calculate_score_details(probs, target_probs, gate_sequence, active_jokers, circuit_depth=None):
+    """以目标匹配质量为主、线路深度为成本计算得分。"""
+    match_quality = sum(
+        min(float(probs.get(state, 0.0)), float(target_probability))
+        for state, target_probability in target_probs.items()
+    )
+    match_quality = max(0.0, min(1.0, match_quality))
     gate_names = [g[0] for g in gate_sequence]
+    joker_chips = 0
     if "ENTANGLE" in active_jokers and "CNOT" in gate_names:
-        base_chips += 100
+        joker_chips += 100
     if "MEASURE" in active_jokers and len(target_probs) == 1:
-        base_chips += 80
+        joker_chips += 80
     if "BALANCER" in active_jokers and len(target_probs) == 4:
-        base_chips += 120
-        
-    mult = 1.0
-    for g in gate_names:
-        if g == "H": mult *= 1.5
-        if g == "Z" and "PHASE" in active_jokers: mult *= 1.5
-    if "CNOT" in gate_names: mult *= 2.0
-    if "COMPRESSION" in active_jokers and len(gate_sequence) <= 3:
-        mult *= 1.8
-    return int(base_chips), round(mult, 2)
+        joker_chips += 120
+
+    # 奖励也受匹配质量约束，避免靠 Joker 在错误线路上硬刷分。
+    chips = int((300 + joker_chips) * match_quality)
+    quality_mult = 1.0 + 4.0 * (match_quality ** 2)
+    depth = len(gate_sequence) if circuit_depth is None else max(0, int(circuit_depth))
+    depth_decay = 0.93 if "COMPRESSION" in active_jokers else 0.85
+    depth_efficiency = depth_decay ** depth
+    joker_mult = 1.0
+    if "PHASE" in active_jokers and "Z" in gate_names:
+        joker_mult *= 1.25
+    if "COMPRESSION" in active_jokers and depth <= 3:
+        joker_mult *= 1.15
+    mult = quality_mult * depth_efficiency * joker_mult
+    return {
+        "chips": chips,
+        "mult": round(mult, 3),
+        "match_quality": round(match_quality, 4),
+        "quality_mult": round(quality_mult, 3),
+        "circuit_depth": depth,
+        "depth_efficiency": round(depth_efficiency, 3),
+    }
+
+
+def calculate_score(probs, target_probs, gate_sequence, active_jokers, circuit_depth=None):
+    details = calculate_score_details(
+        probs,
+        target_probs,
+        gate_sequence,
+        active_jokers,
+        circuit_depth,
+    )
+    return details["chips"], details["mult"]

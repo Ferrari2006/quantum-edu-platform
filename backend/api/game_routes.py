@@ -16,13 +16,13 @@ if str(GAME1_PATH) not in sys.path:
 from games.game1.quantum_balatro.quantum_core import (  # noqa: E402
     LEVELS,
     calculate_score,
+    calculate_score_details,
     check_boss_constraints,
     get_quantum_probs,
 )
 from games.game2.quantum_balatro_original.game_state import (  # noqa: E402
     Card,
     GameState,
-    SchrodingerCatJoker,
 )
 from games.game2.quantum_balatro_original.quantum_backend import QuantumBackend  # noqa: E402
 
@@ -217,6 +217,7 @@ class CircuitStageRequest(BaseModel):
 class CardPlayRequest(BaseModel):
     selected_indices: list[int]
     targets: list[list[int]]
+    slots: list[int] | None = None
 
 
 class CircuitGameSession:
@@ -235,6 +236,12 @@ class CircuitGameSession:
         self.last_probabilities: dict[str, float] = {}
         self.last_target_probs: dict[str, float] = {}
         self.last_recap_note = "Play a circuit to see how gates changed the measured probabilities."
+        self.last_score_details = {
+            "match_quality": 0.0,
+            "quality_mult": 1.0,
+            "circuit_depth": 0,
+            "depth_efficiency": 1.0,
+        }
         self.blind_event = random.choice(CIRCUIT_BLIND_EVENTS)
         self.event_used = False
         self.last_event_result = ""
@@ -267,6 +274,9 @@ class CircuitGameSession:
         ordered = sorted(self.gates, key=lambda item: (item.slot, item.qubit))
         return [(item.gate, item.qubit) for item in ordered]
 
+    def circuit_depth(self) -> int:
+        return len({item.slot for item in self.gates})
+
     def level(self) -> dict[str, Any]:
         return LEVELS[self.level_idx]
 
@@ -281,12 +291,14 @@ class CircuitGameSession:
         self.ensure_recommendation()
         level = self.level()
         probs = self.probabilities()
-        chips, mult = calculate_score(
+        score_details = calculate_score_details(
             probs,
             level["target_probs"],
             self.gate_sequence(),
             self.active_jokers,
+            self.circuit_depth(),
         )
+        chips, mult = score_details["chips"], score_details["mult"]
         preview_chips, preview_mult, preview_note = self.apply_event_preview(chips, mult)
         return {
             "active": True,
@@ -316,6 +328,10 @@ class CircuitGameSession:
                 "chips": self.last_chips,
                 "mult": round(self.last_mult, 2),
                 "score": int(self.last_chips * self.last_mult),
+                "match_quality": getattr(self, "last_score_details", {}).get("match_quality", 0.0),
+                "quality_mult": getattr(self, "last_score_details", {}).get("quality_mult", 1.0),
+                "circuit_depth": getattr(self, "last_score_details", {}).get("circuit_depth", 0),
+                "depth_efficiency": getattr(self, "last_score_details", {}).get("depth_efficiency", 1.0),
                 "note": self.last_recap_note,
             },
             "warning": self.warning,
@@ -351,6 +367,10 @@ class CircuitGameSession:
                 "total": int(preview_chips * preview_mult * self.stored_mult),
                 "match_chips": preview_chips,
                 "gate_mult": round(preview_mult, 2),
+                "match_quality": score_details["match_quality"],
+                "quality_mult": score_details["quality_mult"],
+                "circuit_depth": score_details["circuit_depth"],
+                "depth_efficiency": score_details["depth_efficiency"],
                 "stored_mult": round(self.stored_mult, 2),
                 "event_note": preview_note,
             },
@@ -471,17 +491,26 @@ class CircuitGameSession:
 
     def apply_event_preview(self, chips: int, mult: float) -> tuple[int, float, str]:
         event_id = self.blind_event["id"]
+        probabilities = self.probabilities()
+        match_quality = sum(
+            min(probabilities.get(state, 0.0), target_probability)
+            for state, target_probability in self.level()["target_probs"].items()
+        )
+        match_quality = max(0.0, min(1.0, match_quality))
         if self.event_used and event_id == "CALIBRATION_DRIFT":
             return chips, mult, ""
         gate_names = [gate for gate, _ in self.gate_sequence()]
         if event_id == "CALIBRATION_DRIFT" and "H" in gate_names:
-            return chips, mult + 1.5, "+1.5 mult from first H"
+            bonus = round(1.5 * match_quality, 2)
+            return chips, mult + bonus, f"+{bonus} quality-scaled mult from first H"
         if event_id == "NOISY_HARDWARE" and len(gate_names) > 3:
             return int(chips * 0.85), mult, "-15% chips after 3 gates"
         if event_id == "PHASE_EXPERIMENT" and "Z" in gate_names:
-            return chips + 70 * gate_names.count("Z"), mult, "+70 chips per Z"
+            bonus = int(70 * gate_names.count("Z") * match_quality)
+            return chips + bonus, mult, f"+{bonus} quality-scaled chips from Z"
         if event_id == "ENTANGLEMENT_TAX" and "CNOT" in gate_names:
-            return chips + 160 * gate_names.count("CNOT"), mult, "+160 chips per CNOT, -80 score on play"
+            bonus = int(160 * gate_names.count("CNOT") * match_quality)
+            return chips + bonus, mult, f"+{bonus} quality-scaled chips from CNOT, -80 score on play"
         return chips, mult, ""
 
     def apply_event_score(self, chips: int, mult: float) -> tuple[int, float, int, str]:
@@ -631,6 +660,7 @@ class CircuitGameSession:
             self.level()["target_probs"],
             self.gate_sequence(),
             self.active_jokers,
+            self.circuit_depth(),
         )
         _, mult, _, event_note = self.apply_event_score(0, mult)
         self.last_event_result = event_note
@@ -670,12 +700,14 @@ class CircuitGameSession:
             self.warning = message
             return
 
-        chips, mult = calculate_score(
+        score_details = calculate_score_details(
             self.probabilities(),
             self.level()["target_probs"],
             self.gate_sequence(),
             self.active_jokers,
+            self.circuit_depth(),
         )
+        chips, mult = score_details["chips"], score_details["mult"]
         chips, mult, score_cost, event_note = self.apply_event_score(chips, mult)
         played_sequence = self.gate_sequence()
         played_probs = self.probabilities()
@@ -685,6 +717,7 @@ class CircuitGameSession:
         self.score += hand_score
         self.last_chips = chips
         self.last_mult = final_mult
+        self.last_score_details = score_details
         self.last_event_result = event_note or (f"-{score_cost} score from Entanglement Tax" if score_cost else "")
         self.last_gate_sequence = played_sequence
         self.last_probabilities = {str(state): float(value) for state, value in played_probs.items()}
@@ -755,6 +788,12 @@ class CircuitGameSession:
         self.last_probabilities = {}
         self.last_target_probs = {}
         self.last_recap_note = "Play a circuit to see how gates changed the measured probabilities."
+        self.last_score_details = {
+            "match_quality": 0.0,
+            "quality_mult": 1.0,
+            "circuit_depth": 0,
+            "depth_efficiency": 1.0,
+        }
         self.blind_event = random.choice(CIRCUIT_BLIND_EVENTS)
         self.event_used = False
         self.last_event_result = ""
@@ -833,7 +872,6 @@ def start_game(game_id: str) -> dict[str, str]:
     elif game_id == "game2":
         backend = QuantumBackend(num_qubits=3)
         game = GameState(backend=backend)
-        game.jokers.append(SchrodingerCatJoker())
         games_instances["active"] = {"id": "game2", "kind": "cards", "instance": game}
     else:
         raise HTTPException(status_code=400, detail="Unknown game id")
@@ -1067,8 +1105,14 @@ def toggle_circuit_joker(joker_id: str) -> dict[str, Any]:
 @router.post("/play")
 def play_hand(req: CardPlayRequest) -> dict[str, Any]:
     game = active_card_game()
-    success = game.play_hand(req.selected_indices, req.targets)
+    success = game.play_hand(req.selected_indices, req.targets, slot_indices=req.slots)
     return {"success": success, "new_score": game.current_score, "phase": game.phase}
+
+
+@router.post("/cards/preview")
+def preview_card_hand(req: CardPlayRequest) -> dict[str, Any]:
+    game = active_card_game()
+    return game.preview_hand(req.selected_indices, req.targets, slot_indices=req.slots)
 
 
 @router.post("/cards/recommend")

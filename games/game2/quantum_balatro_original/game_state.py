@@ -1,7 +1,8 @@
 import math
 import random
+import cmath
 from qiskit import QuantumCircuit
-from qiskit.quantum_info import Statevector
+from qiskit.quantum_info import Statevector, concurrence, partial_trace, state_fidelity
 
 CARD_BLIND_EVENTS = [
     {
@@ -126,10 +127,11 @@ class MaxwellDemonJoker(Joker):
 
 class SchrodingerCatJoker(Joker):
     def __init__(self):
-        super().__init__("薛定谔的猫", "每次结算时，每保留1次出牌机会，倍率+5")
+        super().__init__("薛定谔的猫", "每次结算时，每保留1次出牌机会，倍率+0.5")
+        self.bonus_per_play = 0.5
 
     def on_calculate_score(self, current_chips, current_mult, state):
-        bonus_mult = state.plays_left * 5
+        bonus_mult = state.plays_left * self.bonus_per_play
         return current_chips, current_mult + bonus_mult
 
 class PhaseKickbackJoker(Joker):
@@ -476,132 +478,535 @@ class GameState:
         self.draw_cards(5)
         self.phase = 'PLAYING'
     
-    def update_preview(self, staged_indices):
+    def update_preview(self, staged_indices, target_qubits_list=None, slot_indices=None):
         """实时计算预览分数，不消耗实际出牌次数"""
         if not staged_indices:
             self.preview_hand_name, self.preview_score, self.preview_fidelity = "None", 0, 0.0
             return
-
-        gate_types = [self.hand[i].gate_type for i in staged_indices]
-        
-        # 牌型判定
-        if len(gate_types) >= 3 and 'CNOT' in gate_types and 'H' in gate_types: h_name = "GHZ State (同花顺)"
-        elif len(gate_types) >= 2 and 'CNOT' in gate_types: h_name = "Bell Pair (纠缠对)"
-        elif all(g == 'H' for g in gate_types) and len(gate_types) > 1: h_name = "Flush (均匀叠加)"
-        elif 'X' in gate_types and 'H' in gate_types: h_name = "Full House (满堂红)"
-        elif len(gate_types) >= 3 and 'X' in gate_types: h_name = "W State (三条)"
-        else: h_name = "High Qubit (高牌)"
-            
-        h_name = self._classify_hand(gate_types)
-        self.preview_hand_name = h_name
-        base_chips = self.poker_hands[h_name]["chips"]
-        base_mult = self.poker_hands[h_name]["mult"]
-        
-        for joker in self.jokers:
-            base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
-            
-        target_state = self._target_state_for_hand(h_name)
-        fidelity = 1.0
-        if self.backend and target_state is not None:
-            fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
-            if abs(1.0 - fidelity) < 1e-9:
-                fidelity = 1.0
-        base_chips, base_mult, fidelity, _ = self.apply_blind_event(gate_types, base_chips, base_mult, fidelity)
-        self.preview_fidelity = fidelity
-        self.preview_score = int((base_chips * base_mult) * fidelity)
+        if target_qubits_list is None:
+            target_qubits_list = [[0] for _ in staged_indices]
+        preview = self.preview_hand(staged_indices, target_qubits_list, slot_indices=slot_indices)
+        self.preview_hand_name = preview.get('hand', 'None')
+        self.preview_score = preview.get('score', 0)
+        self.preview_fidelity = preview.get('fidelity', 0.0)
 
     def _hand_key(self, prefix):
         return next(key for key in self.poker_hands if key.startswith(prefix))
 
-    def _classify_hand(self, gate_types):
-        if 'CCX' in gate_types:
-            return self._hand_key("Toffoli Cascade")
-        if 'SWAP' in gate_types and any(g in gate_types for g in ['CNOT', 'CZ']):
-            return self._hand_key("Swap Network")
-        if len(gate_types) >= 3 and 'CNOT' in gate_types and 'H' in gate_types:
+    def _normalize_operations(self, operations):
+        normalized = []
+        for operation in operations:
+            if isinstance(operation, str):
+                normalized.append({'gate': operation.upper(), 'targets': []})
+            else:
+                normalized.append({
+                    'gate': str(operation.get('gate', '')).upper(),
+                    'targets': list(operation.get('targets', [])),
+                })
+        return normalized
+
+    def _state_probabilities(self, state):
+        if state is None:
+            return []
+        return [float(abs(amplitude) ** 2) for amplitude in state.data]
+
+    def _qubit_one_probability(self, probabilities, qubit):
+        return sum(
+            probability
+            for basis_index, probability in enumerate(probabilities)
+            if (basis_index >> qubit) & 1
+        )
+
+    def _single_qubit_purity(self, state, qubit):
+        if state is None:
+            return 1.0
+        rho00 = 0.0
+        rho11 = 0.0
+        rho01 = 0j
+        step = 1 << qubit
+        for basis_index in range(len(state.data)):
+            if basis_index & step:
+                continue
+            zero_amplitude = state.data[basis_index]
+            one_amplitude = state.data[basis_index | step]
+            rho00 += abs(zero_amplitude) ** 2
+            rho11 += abs(one_amplitude) ** 2
+            rho01 += zero_amplitude * one_amplitude.conjugate()
+        return float(rho00 ** 2 + rho11 ** 2 + 2 * abs(rho01) ** 2)
+
+    def _has_relative_phase(self, state):
+        if state is None:
+            return False
+        nonzero = [amplitude for amplitude in state.data if abs(amplitude) > 1e-7]
+        if len(nonzero) < 2:
+            return False
+        reference_phase = cmath.phase(nonzero[0])
+        return any(
+            abs(math.sin(cmath.phase(amplitude) - reference_phase)) > 1e-5
+            or math.cos(cmath.phase(amplitude) - reference_phase) < 0.999
+            for amplitude in nonzero[1:]
+        )
+
+    def _bell_candidate(self, operations, final_state=None):
+        superposed = set()
+        for operation in operations:
+            gate = operation['gate']
+            targets = operation['targets']
+            if gate in ['H', 'RX', 'RY'] and targets:
+                superposed.add(targets[0])
+                continue
+            if gate not in ['CNOT', 'CX', 'CZ'] or len(targets) < 2:
+                continue
+            source, target = targets[:2]
+            prepared = source in superposed if gate in ['CNOT', 'CX'] else source in superposed and target in superposed
+            if not prepared:
+                continue
+            if final_state is None:
+                return operation
+            try:
+                traced_out = [
+                    qubit
+                    for qubit in range(self.num_qubits)
+                    if qubit not in [source, target]
+                ]
+                pair_state = partial_trace(final_state, traced_out)
+                if float(concurrence(pair_state)) > 0.1:
+                    return operation
+            except Exception:
+                if self._single_qubit_purity(final_state, source) < 0.98 and self._single_qubit_purity(final_state, target) < 0.98:
+                    return operation
+        return None
+
+    def _is_ghz_circuit(self, operations, final_state):
+        if self.num_qubits < 3 or final_state is None:
+            return False
+        for h_index, h_operation in enumerate(operations):
+            if h_operation['gate'] != 'H' or not h_operation['targets']:
+                continue
+            reached = {h_operation['targets'][0]}
+            for operation in operations[h_index + 1:]:
+                if operation['gate'] not in ['CNOT', 'CX'] or len(operation['targets']) < 2:
+                    continue
+                control, target = operation['targets'][:2]
+                if control in reached:
+                    reached.add(target)
+            if len(reached) != self.num_qubits:
+                continue
+            probabilities = self._state_probabilities(final_state)
+            endpoint_probability = probabilities[0] + probabilities[-1]
+            if endpoint_probability > 0.98 and 0.4 <= probabilities[0] <= 0.6 and 0.4 <= probabilities[-1] <= 0.6:
+                return True
+        return False
+
+    def _is_w_state(self, final_state):
+        probabilities = self._state_probabilities(final_state)
+        if not probabilities:
+            return False
+        populated = [
+            probability
+            for basis_index, probability in enumerate(probabilities)
+            if basis_index.bit_count() == 1 and probability > 0.05
+        ]
+        single_excitation_total = sum(
+            probability
+            for basis_index, probability in enumerate(probabilities)
+            if basis_index.bit_count() == 1
+        )
+        return len(populated) >= 3 and single_excitation_total > 0.98 and max(populated) - min(populated) < 0.08
+
+    def _is_uniform_superposition(self, final_state):
+        probabilities = self._state_probabilities(final_state)
+        if not probabilities:
+            return False
+        expected = 1 / len(probabilities)
+        return all(abs(probability - expected) < 0.015 for probability in probabilities)
+
+    def _classify_hand(self, operations, final_state=None):
+        operations = self._normalize_operations(operations)
+        gates = [operation['gate'] for operation in operations]
+        probabilities = self._state_probabilities(final_state)
+
+        for index, operation in enumerate(operations):
+            if operation['gate'] not in ['CCX', 'TOFFOLI'] or len(operation['targets']) < 3 or not probabilities:
+                continue
+            controls = operation['targets'][:2]
+            target = operation['targets'][2]
+            prepared_controls = {
+                earlier['targets'][0]
+                for earlier in operations[:index]
+                if earlier['gate'] in ['X', 'H', 'RX', 'RY'] and earlier['targets']
+            }
+            if set(controls) <= prepared_controls and self._qubit_one_probability(probabilities, target) > 0.05:
+                return self._hand_key("Toffoli Cascade")
+
+        if self._is_ghz_circuit(operations, final_state):
             return self._hand_key("GHZ State")
-        if sum(1 for g in gate_types if g in ['Z', 'CZ', 'RZ']) >= 2:
-            return self._hand_key("Phase Lock")
-        if len(gate_types) >= 2 and 'CNOT' in gate_types:
-            return self._hand_key("Bell Pair")
-        if sum(1 for g in gate_types if g in ['RX', 'RY', 'RZ']) >= 2:
-            return self._hand_key("Rotation Trio")
-        if all(g == 'H' for g in gate_types) and len(gate_types) > 1:
-            return self._hand_key("Flush")
-        if 'X' in gate_types and 'H' in gate_types:
-            return self._hand_key("Full House")
-        if len(gate_types) >= 3 and 'X' in gate_types:
+        if self._is_w_state(final_state) and len(operations) >= 3:
             return self._hand_key("W State")
+
+        has_swap = any(operation['gate'] == 'SWAP' for operation in operations)
+        has_entangler = any(operation['gate'] in ['CNOT', 'CX', 'CZ'] for operation in operations)
+        if has_swap and has_entangler and any(
+            self._single_qubit_purity(final_state, qubit) < 0.98
+            for qubit in range(self.num_qubits)
+        ):
+            return self._hand_key("Swap Network")
+
+        phase_operations = [operation for operation in operations if operation['gate'] in ['Z', 'CZ', 'RZ']]
+        if len(phase_operations) >= 2 and self._has_relative_phase(final_state):
+            return self._hand_key("Phase Lock")
+
+        if self._bell_candidate(operations, final_state) is not None:
+            return self._hand_key("Bell Pair")
+
+        rotation_operations = [operation for operation in operations if operation['gate'] in ['RX', 'RY', 'RZ']]
+        if len(rotation_operations) >= 3 and len({operation['gate'] for operation in rotation_operations}) >= 2:
+            if probabilities and max(probabilities) < 0.98:
+                return self._hand_key("Rotation Trio")
+
+        if len(operations) > 1 and gates and all(gate == 'H' for gate in gates) and self._is_uniform_superposition(final_state):
+            return self._hand_key("Flush")
+
+        h_targets = {
+            operation['targets'][0]
+            for operation in operations
+            if operation['gate'] == 'H' and operation['targets']
+        }
+        x_targets = {
+            operation['targets'][0]
+            for operation in operations
+            if operation['gate'] == 'X' and operation['targets']
+        }
+        if probabilities and h_targets and x_targets and any(h_target != x_target for h_target in h_targets for x_target in x_targets):
+            has_balanced = any(0.45 <= self._qubit_one_probability(probabilities, qubit) <= 0.55 for qubit in h_targets)
+            has_deterministic_one = any(self._qubit_one_probability(probabilities, qubit) >= 0.98 for qubit in x_targets)
+            if has_balanced and has_deterministic_one:
+                return self._hand_key("Full House")
+
         return self._hand_key("High Qubit")
 
-    def _target_state_for_hand(self, hand_name):
+    def _apply_operation_to_circuit(self, circuit, operation):
+        gate = operation['gate']
+        targets = operation['targets']
+        if not targets:
+            return
+        if gate == 'H': circuit.h(targets[0])
+        elif gate == 'X': circuit.x(targets[0])
+        elif gate == 'Y': circuit.y(targets[0])
+        elif gate == 'Z': circuit.z(targets[0])
+        elif gate == 'RX': circuit.rx(math.pi / 2, targets[0])
+        elif gate == 'RY': circuit.ry(math.pi / 2, targets[0])
+        elif gate == 'RZ': circuit.rz(math.pi / 2, targets[0])
+        elif gate in ['CNOT', 'CX'] and len(targets) >= 2: circuit.cx(targets[0], targets[1])
+        elif gate == 'CZ' and len(targets) >= 2: circuit.cz(targets[0], targets[1])
+        elif gate == 'SWAP' and len(targets) >= 2: circuit.swap(targets[0], targets[1])
+        elif gate in ['CCX', 'TOFFOLI'] and len(targets) >= 3: circuit.ccx(targets[0], targets[1], targets[2])
+
+    def _target_state_for_hand(self, hand_name, operations=None, final_state=None):
         if self.num_qubits <= 0:
             return None
 
+        operations = self._normalize_operations(operations or [])
+
         if hand_name.startswith("W State") and self.num_qubits >= 3:
             amplitudes = [0.0] * (2 ** self.num_qubits)
-            for qubit in range(3):
-                amplitudes[1 << qubit] = 1 / (3 ** 0.5)
+            probabilities = self._state_probabilities(final_state)
+            active_qubits = [
+                basis_index.bit_length() - 1
+                for basis_index, probability in enumerate(probabilities)
+                if basis_index.bit_count() == 1 and probability > 0.05
+            ] or list(range(3))
+            for qubit in active_qubits:
+                amplitudes[1 << qubit] = 1 / (len(active_qubits) ** 0.5)
             return Statevector(amplitudes)
 
         qc = QuantumCircuit(self.num_qubits)
         if hand_name.startswith("Toffoli Cascade") and self.num_qubits >= 3:
-            qc.h(0)
-            qc.x(1)
-            qc.ccx(0, 1, 2)
+            for operation in operations:
+                self._apply_operation_to_circuit(qc, operation)
         elif hand_name.startswith("Swap Network") and self.num_qubits >= 2:
-            qc.h(0)
-            qc.swap(0, 1)
-            if self.num_qubits >= 3:
-                qc.cx(1, 2)
+            for operation in operations:
+                self._apply_operation_to_circuit(qc, operation)
         elif hand_name.startswith("GHZ State"):
-            qc.h(0)
-            for qubit in range(1, self.num_qubits):
-                qc.cx(0, qubit)
+            root = next(
+                (operation['targets'][0] for operation in operations if operation['gate'] == 'H' and operation['targets']),
+                0,
+            )
+            qc.h(root)
+            for qubit in range(self.num_qubits):
+                if qubit != root:
+                    qc.cx(root, qubit)
         elif hand_name.startswith("Phase Lock") and self.num_qubits >= 2:
-            qc.h(0)
-            qc.cz(0, 1)
+            for operation in operations:
+                self._apply_operation_to_circuit(qc, operation)
         elif hand_name.startswith("Bell Pair") and self.num_qubits >= 2:
-            qc.h(0)
-            qc.cx(0, 1)
+            entangler = self._bell_candidate(operations, final_state)
+            source, target = entangler['targets'][:2] if entangler else (0, 1)
+            if entangler and entangler['gate'] == 'CZ':
+                qc.h(source)
+                qc.h(target)
+                qc.cz(source, target)
+            else:
+                qc.h(source)
+                qc.cx(source, target)
         elif hand_name.startswith("Rotation Trio"):
-            qc.rx(math.pi / 2, 0)
-            if self.num_qubits >= 2:
-                qc.ry(math.pi / 2, 1)
-            if self.num_qubits >= 3:
-                qc.rz(math.pi / 2, 2)
+            for operation in operations:
+                if operation['gate'] in ['RX', 'RY', 'RZ']:
+                    self._apply_operation_to_circuit(qc, operation)
         elif hand_name.startswith("Flush"):
             for qubit in range(self.num_qubits):
                 qc.h(qubit)
         elif hand_name.startswith("Full House") and self.num_qubits >= 2:
-            qc.h(0)
-            qc.x(1)
+            h_target = next(operation['targets'][0] for operation in operations if operation['gate'] == 'H' and operation['targets'])
+            x_target = next(
+                operation['targets'][0]
+                for operation in operations
+                if operation['gate'] == 'X' and operation['targets'] and operation['targets'][0] != h_target
+            )
+            qc.h(h_target)
+            qc.x(x_target)
         elif hand_name.startswith("High Qubit"):
             pass
         else:
             return None
         return Statevector.from_instruction(qc)
 
-    def play_hand(self, selected_card_indices, target_qubits_list, theta_list=None):
+    def _ideal_hand_shape(self, hand_name):
+        if hand_name.startswith("GHZ State"):
+            return self.num_qubits, self.num_qubits
+        if hand_name.startswith("W State"):
+            return max(3, self.num_qubits), max(2, self.num_qubits - 1)
+        if hand_name.startswith("Bell Pair"):
+            return 2, 2
+        if hand_name.startswith("Flush"):
+            return self.num_qubits, 1
+        if hand_name.startswith("Full House"):
+            return 2, 1
+        if hand_name.startswith("Phase Lock"):
+            return 3, 3
+        if hand_name.startswith("Rotation Trio"):
+            return 3, 3
+        if hand_name.startswith("Swap Network"):
+            return 3, 3
+        if hand_name.startswith("Toffoli Cascade"):
+            return 3, 2
+        return 1, 1
+
+    def _score_quantum_hand(
+        self,
+        base_chips,
+        base_mult,
+        fidelity,
+        hand_name,
+        operations,
+        circuit_depth,
+        ineffective_gates,
+    ):
+        ideal_gates, ideal_depth = self._ideal_hand_shape(hand_name)
+        extra_gates = max(0, len(operations) - ideal_gates)
+        depth_overrun = max(0, circuit_depth - ideal_depth)
+        redundant_units = max(extra_gates, depth_overrun, ineffective_gates)
+        depth_efficiency = 0.82 ** redundant_units
+        fidelity_weight = max(0.0, min(1.0, fidelity)) ** 2
+        score = int(base_chips * base_mult * fidelity_weight * depth_efficiency)
+        return score, {
+            'fidelity_weight': round(fidelity_weight, 4),
+            'gate_count': len(operations),
+            'ideal_gate_count': ideal_gates,
+            'circuit_depth': circuit_depth,
+            'ideal_depth': ideal_depth,
+            'ineffective_gates': ineffective_gates,
+            'redundant_gates': redundant_units,
+            'depth_efficiency': round(depth_efficiency, 3),
+        }
+
+    def _resolve_circuit_depth(self, slot_indices, operation_count):
+        if slot_indices is None:
+            return operation_count
+        if len(slot_indices) != operation_count or any(not isinstance(slot, int) or slot < 0 for slot in slot_indices):
+            raise ValueError("Invalid slot sequence")
+        return len(set(slot_indices))
+
+    def _prepare_ordered_play(self, selected_card_indices, target_qubits_list):
+        """按请求顺序绑定卡牌与目标；请求顺序即线路从左到右的执行顺序。"""
+        if len(selected_card_indices) != len(target_qubits_list):
+            return None, None, "Targets length mismatch"
+        if len(set(selected_card_indices)) != len(selected_card_indices):
+            return None, None, "A card cannot be played twice"
+        if any((not isinstance(i, int) or i < 0 or i >= len(self.hand)) for i in selected_card_indices):
+            return None, None, "Invalid card indices"
+
+        played_cards = [self.hand[i] for i in selected_card_indices]
+        final_targets = []
+        for card, raw_targets in zip(played_cards, target_qubits_list):
+            targets = list(raw_targets)
+            if not targets:
+                return None, None, f"Missing target for {card.gate_type}"
+            if card.gate_type in ['CNOT', 'SWAP', 'CZ'] and len(targets) < 2:
+                targets.append((targets[0] + 1) % self.num_qubits)
+            if card.gate_type in ['CCX'] and len(targets) < 3:
+                targets.extend([
+                    (targets[0] + 1) % self.num_qubits,
+                    (targets[0] + 2) % self.num_qubits,
+                ])
+            if any(not isinstance(target, int) or target < 0 or target >= self.num_qubits for target in targets):
+                return None, None, f"Invalid target for {card.gate_type}"
+            required_targets = getattr(card, 'target_count', 1)
+            if len(targets) < required_targets or len(set(targets[:required_targets])) < required_targets:
+                return None, None, f"Invalid target layout for {card.gate_type}"
+            final_targets.append(targets)
+        return played_cards, final_targets, ""
+
+    def preview_hand(self, selected_card_indices, target_qubits_list, theta_list=None, slot_indices=None):
+        """在当前线路副本上计算牌型、保真度与得分，不修改游戏状态。"""
+        if self.phase != 'PLAYING' or not selected_card_indices:
+            return {
+                'valid': False,
+                'hand': 'None',
+                'base_chips': 0,
+                'base_mult': 0,
+                'fidelity': 0.0,
+                'joker_chips_delta': 0,
+                'joker_mult_delta': 0,
+                'score': 0,
+                'event_note': '',
+                'warning': 'Stage at least one card',
+            }
+
+        played_cards, final_targets, warning = self._prepare_ordered_play(
+            selected_card_indices,
+            target_qubits_list,
+        )
+        if warning:
+            return {
+                'valid': False,
+                'hand': 'None',
+                'base_chips': 0,
+                'base_mult': 0,
+                'fidelity': 0.0,
+                'joker_chips_delta': 0,
+                'joker_mult_delta': 0,
+                'score': 0,
+                'event_note': '',
+                'warning': warning,
+            }
+
+        gate_types = [card.gate_type for card in played_cards]
+        operations = [
+            {'gate': card.gate_type, 'targets': targets}
+            for card, targets in zip(played_cards, final_targets)
+        ]
+        fidelity = 1.0
+        preview_backend = None
+        ineffective_gates = 0
+        try:
+            if self.backend:
+                preview_backend = self.backend.clone() if hasattr(self.backend, 'clone') else None
+                if preview_backend is None:
+                    raise RuntimeError("Backend preview is unavailable")
+                for index, (card, targets) in enumerate(zip(played_cards, final_targets)):
+                    state_before = preview_backend.get_statevector()
+                    theta = theta_list[index] if theta_list else (
+                        math.pi / 2 if card.gate_type in ['RX', 'RY', 'RZ'] else None
+                    )
+                    preview_backend.apply_gate(card.gate_type, targets, theta)
+                    if state_before is not None and state_fidelity(state_before, preview_backend.get_statevector()) > 1 - 1e-9:
+                        ineffective_gates += 1
+            final_state = preview_backend.get_statevector() if preview_backend else None
+            hand_name = self._classify_hand(operations, final_state)
+            target_state = self._target_state_for_hand(hand_name, operations, final_state)
+            if preview_backend and target_state is not None:
+                fidelity = max(0.0, min(1.0, preview_backend.calculate_fidelity(target_state)))
+                if abs(1.0 - fidelity) < 1e-9:
+                    fidelity = 1.0
+        except Exception as exc:
+            return {
+                'valid': False,
+                'hand': 'None',
+                'base_chips': 0,
+                'base_mult': 0,
+                'fidelity': 0.0,
+                'joker_chips_delta': 0,
+                'joker_mult_delta': 0,
+                'score': 0,
+                'event_note': '',
+                'warning': f"Preview failed: {str(exc)}",
+            }
+
+        original_chips = self.poker_hands[hand_name]["chips"]
+        original_mult = self.poker_hands[hand_name]["mult"]
+        base_chips, base_mult = original_chips, original_mult
+
+        previous_gate_types = self.last_played_gate_types
+        self.last_played_gate_types = gate_types[:]
+        try:
+            for joker in self.jokers:
+                base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
+        finally:
+            self.last_played_gate_types = previous_gate_types
+
+        base_chips, base_mult, fidelity, event_note = self.apply_blind_event(
+            gate_types,
+            base_chips,
+            base_mult,
+            fidelity,
+        )
+        try:
+            circuit_depth = self._resolve_circuit_depth(slot_indices, len(operations))
+        except ValueError as exc:
+            return {
+                'valid': False,
+                'hand': hand_name,
+                'base_chips': original_chips,
+                'base_mult': original_mult,
+                'fidelity': round(fidelity, 3),
+                'joker_chips_delta': base_chips - original_chips,
+                'joker_mult_delta': base_mult - original_mult,
+                'score': 0,
+                'event_note': event_note,
+                'warning': str(exc),
+            }
+        score, efficiency_details = self._score_quantum_hand(
+            base_chips,
+            base_mult,
+            fidelity,
+            hand_name,
+            operations,
+            circuit_depth,
+            ineffective_gates,
+        )
+        return {
+            'valid': True,
+            'hand': hand_name,
+            'base_chips': original_chips,
+            'base_mult': original_mult,
+            'fidelity': round(fidelity, 3),
+            'joker_chips_delta': base_chips - original_chips,
+            'joker_mult_delta': base_mult - original_mult,
+            'score': score,
+            'event_note': event_note,
+            'warning': '',
+            'gate_sequence': operations,
+            **efficiency_details,
+        }
+
+    def play_hand(self, selected_card_indices, target_qubits_list, theta_list=None, slot_indices=None):
         """升级版：支持多卡牌插槽同时出牌的安全逻辑"""
         if self.phase != 'PLAYING' or self.plays_left <= 0 or not selected_card_indices:
             return False
 
-        # 基本输入验证：索引合法、目标数与索引一一对应
-        if any((not isinstance(i, int) or i < 0 or i >= len(self.hand)) for i in selected_card_indices):
-            self.warning = "Invalid card indices"
+        played_cards, final_targets, warning = self._prepare_ordered_play(
+            selected_card_indices,
+            target_qubits_list,
+        )
+        if warning:
+            self.warning = warning
             return False
-        if len(selected_card_indices) != len(target_qubits_list):
-            self.warning = "Targets length mismatch"
-            return False
-
-        # 去重并按升序排列（保持从左到右的时间顺序）
-        unique_indices = sorted(dict.fromkeys(selected_card_indices))
-        played_cards = [self.hand[i] for i in unique_indices]
-        final_targets = [list(t) for t in target_qubits_list]
 
         # 记录将要打出的 gate types（用于判定牌型）
         played_gate_types = []
+        played_operations = []
+        ineffective_gates = 0
 
         try:
             for i, card in enumerate(played_cards):
@@ -616,20 +1021,16 @@ class GameState:
                 for joker in self.jokers:
                     joker.on_play_gate(card.gate_type, self)
 
-                # 自动补全双/三比特门的目标位
                 curr_target = final_targets[i]
-                if card.gate_type in ['CNOT', 'SWAP', 'CZ'] and len(curr_target) < 2:
-                    curr_target.append((curr_target[0] + 1) % self.num_qubits)
-                if card.gate_type in ['CCX'] and len(curr_target) < 3:
-                    curr_target.extend([
-                        (curr_target[0] + 1) % self.num_qubits,
-                        (curr_target[0] + 2) % self.num_qubits,
-                    ])
+                played_operations.append({'gate': card.gate_type, 'targets': curr_target})
 
                 if self.backend:
+                    state_before = self.backend.get_statevector()
                     theta = theta_list[i] if theta_list else (math.pi / 2 if card.gate_type in ['RX', 'RY', 'RZ'] else None)
                     try:
                         self.backend.apply_gate(card.gate_type, curr_target, theta)
+                        if state_before is not None and state_fidelity(state_before, self.backend.get_statevector()) > 1 - 1e-9:
+                            ineffective_gates += 1
                     except Exception:
                         # 如果底层模拟失败，记录警告并返回失败（不尝试复杂回滚）
                         self.warning = f"Backend error applying {card.gate_type}"
@@ -639,12 +1040,14 @@ class GameState:
                     self.discard_pile.append(card)
 
             # 移除已打出的手牌（按索引）
-            remaining = [c for idx, c in enumerate(self.hand) if idx not in unique_indices]
+            selected_index_set = set(selected_card_indices)
+            remaining = [c for idx, c in enumerate(self.hand) if idx not in selected_index_set]
             self.hand = remaining
             self.plays_left -= 1
 
             # 判定牌型并计分
-            hand_name = self._classify_hand(played_gate_types)
+            final_state = self.backend.get_statevector() if self.backend else None
+            hand_name = self._classify_hand(played_operations, final_state)
             self.last_hand_played = hand_name
             self.current_lesson = self._lesson_for_hand(hand_name, played_gate_types)
 
@@ -656,7 +1059,7 @@ class GameState:
             for joker in self.jokers:
                 base_chips, base_mult = joker.on_calculate_score(base_chips, base_mult, self)
 
-            target_state = self._target_state_for_hand(hand_name)
+            target_state = self._target_state_for_hand(hand_name, played_operations, final_state)
             fidelity = 1.0
             if self.backend and target_state is not None:
                 fidelity = max(0.0, min(1.0, self.backend.calculate_fidelity(target_state)))
@@ -671,7 +1074,16 @@ class GameState:
                 commit=True,
             )
             self.last_fidelity = fidelity
-            hand_score = int((base_chips * base_mult) * fidelity)
+            circuit_depth = self._resolve_circuit_depth(slot_indices, len(played_operations))
+            hand_score, efficiency_details = self._score_quantum_hand(
+                base_chips,
+                base_mult,
+                fidelity,
+                hand_name,
+                played_operations,
+                circuit_depth,
+                ineffective_gates,
+            )
             self.last_event_result = event_note
             self.last_score_breakdown = {
                 'hand': hand_name,
@@ -682,13 +1094,18 @@ class GameState:
                 'joker_mult_delta': base_mult - original_mult,
                 'score': hand_score,
                 'event_note': event_note,
+                **efficiency_details,
             }
             self.current_score += hand_score
             cleared = self.current_score >= self.target_score
             self.update_bonus_objective(played_gate_types, hand_name, fidelity, hand_score, cleared)
 
+            # 每一手都是独立线路；UI 清空出牌区后，底层量子态也必须同步重置。
+            if self.backend:
+                self.backend.reset_circuit()
+
             # 补牌与进度检查
-            self.draw_cards(len(unique_indices))
+            self.draw_cards(len(selected_card_indices))
             self.check_progression()
             return True
 

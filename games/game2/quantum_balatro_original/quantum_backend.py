@@ -23,12 +23,19 @@ class QuantumBackend:
         self.circuit.clear()
         self.current_state = Statevector.from_instruction(self.circuit)
 
+    def clone(self):
+        """复制当前线路，用于无副作用的实时预览。"""
+        cloned = QuantumBackend(self.num_qubits)
+        cloned.circuit = self.circuit.copy()
+        cloned.current_state = Statevector.from_instruction(cloned.circuit)
+        return cloned
+
     def upgrade_qubits(self, new_num_qubits):
         """
         动态扩容：例如从 3 比特升级到 5 比特。
         这通常发生在切换大关卡（Ante 3）时。
         """
-        print(f"[Backend] 硬件升级：量子比特数量从 {self.num_qubits} 扩容至 {new_num_qubits}")
+        logger.info("[Backend] 硬件升级：量子比特数量从 %d 扩容至 %d", self.num_qubits, new_num_qubits)
         self.num_qubits = new_num_qubits
         self.circuit = QuantumCircuit(self.num_qubits)
         self.reset_circuit()

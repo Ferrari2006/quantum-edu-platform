@@ -100,9 +100,23 @@ class DisplayEngine:
 
     def trigger_preview_update(self):
         """收集当前插槽里的卡牌索引，通知状态机更新预览"""
-        staged_items = sorted(self.staged_cards.items(), key=lambda x: x[0][1])
+        staged_items = sorted(self.staged_cards.items(), key=lambda x: (x[0][1], x[0][0]))
         indices = [h_idx for _, h_idx in staged_items]
-        self.state.update_preview(indices)
+        targets = []
+        for (qubit, _), hand_index in staged_items:
+            card = self.state.hand[hand_index]
+            if card.gate_type in ['CNOT', 'CX', 'CZ', 'SWAP']:
+                targets.append([qubit, (qubit + 1) % self.state.num_qubits])
+            elif card.gate_type in ['CCX', 'TOFFOLI']:
+                targets.append([
+                    qubit,
+                    (qubit + 1) % self.state.num_qubits,
+                    (qubit + 2) % self.state.num_qubits,
+                ])
+            else:
+                targets.append([qubit])
+        slots = [slot for (_, slot), _ in staged_items]
+        self.state.update_preview(indices, targets, slots)
     def handle_events(self):
         self.mouse_pos = pygame.mouse.get_pos()
         for event in pygame.event.get():
@@ -144,10 +158,11 @@ class DisplayEngine:
                         self.trigger_preview_update()
                         self.is_dragging = False
                     elif play_btn.collidepoint(event.pos) and self.staged_cards:
-                        staged_items = sorted(self.staged_cards.items(), key=lambda x: x[0][1])
+                        staged_items = sorted(self.staged_cards.items(), key=lambda x: (x[0][1], x[0][0]))
                         indices_to_play = [h_idx for _, h_idx in staged_items]
                         targets = [[q] for (q, _), _ in staged_items]
-                        self.state.play_hand(indices_to_play, targets)
+                        slots = [slot for (_, slot), _ in staged_items]
+                        self.state.play_hand(indices_to_play, targets, slot_indices=slots)
                         self.staged_cards.clear()
                         self.trigger_preview_update()
                         self.selected_for_discard.clear()
