@@ -4,6 +4,8 @@ from backend.rag.schema import SourceDocument
 
 
 SUPPORTED_EXTENSIONS = {".md", ".txt"}
+EXCLUDED_DIRECTORIES = {"sources", "templates"}
+EXCLUDED_FILENAMES = {"README.md", "manifest.md"}
 
 
 def discover_documents(root: Path) -> list[SourceDocument]:
@@ -12,10 +14,16 @@ def discover_documents(root: Path) -> list[SourceDocument]:
 
     documents: list[SourceDocument] = []
     for path in sorted(root.rglob("*")):
-        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
+        relative_path = path.relative_to(root)
+        if (
+            path.is_file()
+            and path.suffix.lower() in SUPPORTED_EXTENSIONS
+            and path.name not in EXCLUDED_FILENAMES
+            and not EXCLUDED_DIRECTORIES.intersection(relative_path.parts)
+        ):
             documents.append(
                 SourceDocument(
-                    doc_id=str(path.relative_to(root)).replace("\\", "/"),
+                    doc_id=str(relative_path).replace("\\", "/"),
                     path=str(path),
                     title=path.stem,
                     metadata={"extension": path.suffix.lower()},

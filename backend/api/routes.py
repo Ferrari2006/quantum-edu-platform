@@ -1,14 +1,17 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from backend.rag.chain import answer
+from backend.rag.chain import answer, serialize_context
 from backend.rag.ingest import ingest_docs, ingest_texts
+from backend.rag.llm import LLMConfigurationError, LLMServiceError
+from backend.rag.retriever import retrieve
+from backend.rag.router import route_query
 
 router = APIRouter()
 
 
 class IngestRequest(BaseModel):
-    texts: list[str] = []
+    texts: list[str] = Field(default_factory=list)
     from_docs: bool = False
 
 
@@ -17,19 +20,19 @@ class QueryRequest(BaseModel):
 
 class QuantumGateOp(BaseModel):
     gate: str
-    targets: list[int] = []
+    targets: list[int] = Field(default_factory=list)
     theta: float | None = None
 
 
 class QuantumRunRequest(BaseModel):
     num_qubits: int = 2
-    ops: list[QuantumGateOp] = []
+    ops: list[QuantumGateOp] = Field(default_factory=list)
 
 
 class FidelityRequest(BaseModel):
     num_qubits: int = 2
-    ops: list[QuantumGateOp] = []
-    target_statevector: list[float] = []
+    ops: list[QuantumGateOp] = Field(default_factory=list)
+    target_statevector: list[float] = Field(default_factory=list)
 
 class GameInfo(BaseModel):
     id: str
@@ -57,12 +60,27 @@ def rag_ingest(payload: IngestRequest):
 
 @router.post("/rag/query")
 def rag_query(payload: QueryRequest):
-    return answer(payload.query)
+    query = payload.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query must not be empty")
+    contexts = retrieve(query)
+    return {
+        "query": query,
+        "route": route_query(query),
+        "contexts": [serialize_context(item) for item in contexts],
+    }
 
 
 @router.post("/rag/ask")
 def rag_ask(payload: QueryRequest):
-    return answer(payload.query)
+    if not payload.query.strip():
+        raise HTTPException(status_code=422, detail="query must not be empty")
+    try:
+        return answer(payload.query)
+    except LLMConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LLMServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/quantum/run")

@@ -7,6 +7,11 @@
 .idea/
 .vscode/
 *.log
+.env
+.env.*
+!.env.example
+
+backend/.rag_index/
 
 frontend/node_modules/
 frontend/dist/
