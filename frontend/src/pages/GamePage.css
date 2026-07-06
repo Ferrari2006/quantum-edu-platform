@@ -576,6 +576,26 @@
   transform: translateY(-3px);
 }
 
+.gate-palette button.discard-selected {
+  border-color: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.18), 0 18px 34px rgba(0, 0, 0, 0.28);
+}
+
+.discard-mark {
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.discard-selected .discard-mark {
+  background: #7f1d1d;
+  color: #fee2e2;
+}
+
 .gate-palette button:hover {
   transform: translateY(-4px);
 }

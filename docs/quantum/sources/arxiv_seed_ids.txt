@@ -1,0 +1,6 @@
+# One arXiv ID or arXiv URL per line.
+# Full-text PDFs are not downloaded by the metadata collector.
+#
+# Examples:
+# quant-ph/9605043
+# https://arxiv.org/abs/1804.03719

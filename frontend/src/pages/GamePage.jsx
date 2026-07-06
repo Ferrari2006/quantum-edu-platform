@@ -607,6 +607,7 @@ function GameLobby({ gamesList, onStart }) {
 
 function CircuitGame({ state, onRefresh, onExit }) {
   const [selectedCardId, setSelectedCardId] = useState(null);
+  const [selectedDiscardIds, setSelectedDiscardIds] = useState([]);
   const [showRules, setShowRules] = useState(false);
   const [showTutorialLocal, setShowTutorialLocal] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
@@ -655,11 +656,13 @@ function CircuitGame({ state, onRefresh, onExit }) {
   useEffect(() => {
     if (!handCards.length) {
       setSelectedCardId(null);
+      setSelectedDiscardIds([]);
       return;
     }
     if (!handCards.some((card) => card.id === selectedCardId)) {
       setSelectedCardId(handCards[0].id);
     }
+    setSelectedDiscardIds((current) => current.filter((id) => handCards.some((card) => card.id === id)));
   }, [handCards, selectedCardId]);
 
   const setGate = async (qubit, slot) => {
@@ -692,6 +695,23 @@ function CircuitGame({ state, onRefresh, onExit }) {
   const startGateDrag = (event, card) => {
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ type: "gate", card }));
+  };
+
+  const toggleDiscardSelection = (cardId) => {
+    setSelectedDiscardIds((current) =>
+      current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId],
+    );
+  };
+
+  const discardSelectedCards = async () => {
+    if (!selectedDiscardIds.length) return;
+    setShowRecommendationShadow(false);
+    await api("/circuit/discard", {
+      method: "POST",
+      body: JSON.stringify(selectedDiscardIds),
+    });
+    setSelectedDiscardIds([]);
+    await onRefresh();
   };
 
   const dropGate = async (event, qubit, slot) => {
@@ -810,6 +830,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
           <span>关卡 {state.level_index + 1}/{state.level_count}</span>
           <span>分数 {state.score} / {state.level.target}</span>
           <span>出手机会 {state.hands_left}</span>
+          <span>弃牌 {state.discards_left ?? 0}</span>
           <span>资金 ${state.money}</span>
           <span>牌库 {state.deck_count} / 弃牌 {state.discard_count}</span>
           <span className={recommendation?.used ? "stat-used" : ""}>推荐 {recommendation?.used ? 1 : 0}/1</span>
@@ -837,7 +858,7 @@ function CircuitGame({ state, onRefresh, onExit }) {
               return (
                 <button
                   key={card.id}
-                  className={`gate-card gate-card-${card.gate.toLowerCase()} ${selectedCard?.id === card.id ? "active" : ""}`}
+                  className={`gate-card gate-card-${card.gate.toLowerCase()} ${selectedCard?.id === card.id ? "active" : ""} ${selectedDiscardIds.includes(card.id) ? "discard-selected" : ""}`}
                   data-usage={gateUsage(card.gate)}
                   onClick={() => setSelectedCardId(card.id)}
                   draggable
@@ -848,6 +869,15 @@ function CircuitGame({ state, onRefresh, onExit }) {
                   <strong>{card.gate}</strong>
                   <span>{detail.name}</span>
                   <small>{detail.text}</small>
+                  <span
+                    className="discard-mark"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleDiscardSelection(card.id);
+                    }}
+                  >
+                    {selectedDiscardIds.includes(card.id) ? "已选弃牌" : "标记弃牌"}
+                  </span>
                 </button>
               );
             })}
@@ -895,6 +925,13 @@ function CircuitGame({ state, onRefresh, onExit }) {
             disabled={recommendation?.used}
           >
             {recommendation?.used ? "影子线路已显示" : "推荐出牌"}
+          </button>
+          <button
+            className="btn btn-discard"
+            onClick={discardSelectedCards}
+            disabled={!selectedDiscardIds.length || (state.discards_left ?? 0) <= 0}
+          >
+            弃牌重选 {selectedDiscardIds.length ? `(${selectedDiscardIds.length})` : ""}
           </button>
           <button className="btn btn-observe" onClick={() => action("/circuit/observe")}>观察</button>
           <button className="btn btn-play-hand" onClick={playCircuitHand}>结算本手</button>

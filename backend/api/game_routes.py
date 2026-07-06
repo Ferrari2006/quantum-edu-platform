@@ -224,6 +224,8 @@ class CircuitGameSession:
         self.game_id = "game1"
         self.level_idx = 0
         self.hands_left = 4
+        self.max_discards = 3
+        self.discards_left = self.max_discards
         self.score = 0
         self.money = 3
         self.stored_mult = 1.0
@@ -295,6 +297,7 @@ class CircuitGameSession:
             "level_count": len(LEVELS),
             "level": level,
             "hands_left": self.hands_left,
+            "discards_left": self.discards_left,
             "score": self.score,
             "money": self.money,
             "stored_mult": round(self.stored_mult, 2),
@@ -506,6 +509,10 @@ class CircuitGameSession:
             self.discard_pile = []
         if not hasattr(self, "staged_cards"):
             self.staged_cards = {}
+        if not hasattr(self, "max_discards"):
+            self.max_discards = 3
+        if not hasattr(self, "discards_left"):
+            self.discards_left = self.max_discards
         if not self.deck and not self.hand and not self.discard_pile and not self.staged_cards:
             self.build_starting_deck()
             self.draw_cards()
@@ -577,6 +584,29 @@ class CircuitGameSession:
         self.staged_cards = {}
         self.gates = []
         self.warning = ""
+
+    def discard_hand(self, card_ids: list[int]) -> bool:
+        self.ensure_card_pool()
+        if self.phase != "PLAYING" or self.discards_left <= 0:
+            return False
+        selected_ids = set(card_ids)
+        if not selected_ids:
+            return False
+        staged_ids = set(self.staged_cards)
+        discardable = [
+            card
+            for card in self.hand
+            if card["id"] in selected_ids and card["id"] not in staged_ids
+        ]
+        if len(discardable) != len(selected_ids):
+            raise HTTPException(status_code=400, detail="Only cards in hand can be discarded")
+
+        self.discards_left -= 1
+        self.discard_pile.extend(discardable)
+        self.hand = [card for card in self.hand if card["id"] not in selected_ids]
+        self.draw_cards()
+        self.warning = ""
+        return True
 
     def discard_staged_and_clear(self) -> None:
         self.ensure_card_pool()
@@ -715,6 +745,7 @@ class CircuitGameSession:
             return
         self.level_idx += 1
         self.hands_left = 4
+        self.discards_left = self.max_discards
         self.score = 0
         self.stored_mult = 1.0
         self.observe_count = 0
@@ -1002,6 +1033,13 @@ def play_circuit() -> dict[str, Any]:
 def recommend_circuit_play() -> dict[str, Any]:
     session = active_circuit_session()
     session.recommend_play()
+    return session.serialize()
+
+
+@router.post("/circuit/discard")
+def discard_circuit_cards(card_ids: list[int]) -> dict[str, Any]:
+    session = active_circuit_session()
+    session.discard_hand(card_ids)
     return session.serialize()
 
 

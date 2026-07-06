@@ -1,5 +1,6 @@
 import pytest
 
+from backend.api.game_routes import CircuitGameSession
 from games.game2.quantum_balatro_original.game_state import GameState
 
 
@@ -50,3 +51,17 @@ def test_play_hand_invalid_index():
     success = game.play_hand([999], [[0]])
     assert success is False
     assert "Invalid" in game.warning
+
+
+def test_circuit_discard_redraws_cards():
+    game = CircuitGameSession()
+    original_ids = [card["id"] for card in game.hand]
+    discarded_ids = original_ids[:2]
+
+    success = game.discard_hand(discarded_ids)
+
+    assert success is True
+    assert game.discards_left == game.max_discards - 1
+    assert len(game.hand) == 5
+    assert not set(discarded_ids) & {card["id"] for card in game.hand}
+    assert set(discarded_ids) <= {card["id"] for card in game.discard_pile}

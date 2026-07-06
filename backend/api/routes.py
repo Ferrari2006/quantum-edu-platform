@@ -2,13 +2,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.rag.chain import answer
-from backend.rag.ingest import ingest_texts
+from backend.rag.ingest import ingest_docs, ingest_texts
 
 router = APIRouter()
 
 
 class IngestRequest(BaseModel):
     texts: list[str] = []
+    from_docs: bool = False
 
 
 class QueryRequest(BaseModel):
@@ -50,6 +51,8 @@ def health_data():
 
 @router.post("/rag/ingest")
 def rag_ingest(payload: IngestRequest):
+    if payload.from_docs:
+        return ingest_docs()
     return ingest_texts(payload.texts)
 
 @router.post("/rag/query")
