@@ -21,7 +21,10 @@ class RagSettings:
     index_dir: Path = PROJECT_ROOT / "backend" / ".rag_index"
     default_top_k: int = 5
     default_route: str = "concept"
-    embedding_model: str = os.getenv("RAG_EMBEDDING_MODEL", "placeholder")
+    embedding_model: str = os.getenv("RAG_EMBEDDING_MODEL", "hashing")
+    embedding_dim: int = int(os.getenv("RAG_EMBEDDING_DIM", "512"))
+    vector_store_path: Path = index_dir / "vectors.sqlite3"
+    retrieval_mode: str = os.getenv("RAG_RETRIEVAL_MODE", "hybrid")
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
     llm_api_key: str = os.getenv("DEEPSEEK_API_KEY", os.getenv("LLM_API_KEY", ""))
     llm_model: str = os.getenv("LLM_MODEL", "deepseek-v4-flash")

@@ -4,6 +4,7 @@ from backend.rag.chunking import chunk_document
 from backend.rag.config import settings
 from backend.rag.loaders import discover_documents, load_text
 from backend.rag.retriever import clear_retriever_cache
+from backend.rag.vector_store import VectorStore
 
 
 def ingest_texts(texts: Sequence[str]) -> dict:
@@ -21,14 +22,18 @@ def ingest_docs() -> dict:
     for document in documents:
         chunks.extend(chunk_document(document, load_text(document)))
 
+    store = VectorStore()
+    store.build(chunks)
     clear_retriever_cache()
+    stats = store.stats()
 
     return {
         "documents": len(documents),
         "chunks": len(chunks),
         "docs_dir": str(settings.docs_dir),
         "index_dir": str(settings.index_dir),
+        "vector_store": stats,
         "status": "ready",
-        "retrieval_method": "lexical",
-        "message": "Documents were discovered and prepared for in-memory lexical retrieval.",
+        "retrieval_method": "vector",
+        "message": "Documents were embedded and stored for vector retrieval.",
     }
