@@ -1,21 +1,27 @@
 import { NavLink } from "react-router-dom";
 
+import { useLanguage } from "../i18n.jsx";
+
 export default function NavBar() {
+  const { t, toggleLanguage } = useLanguage();
+
   return (
     <div className="navbar">
-      <div className="brand">量智启学</div>
+      <div className="brand">{t.nav.brand}</div>
       <div className="links">
         <NavLink className="navlink" to="/">
-          Home
+          {t.nav.home}
         </NavLink>
         <NavLink className="navlink" to="/oa">
-          QA
+          {t.nav.qa}
         </NavLink>
         <NavLink className="navlink" to="/game">
-          Game
+          {t.nav.game}
         </NavLink>
+        <button className="language-toggle" type="button" onClick={toggleLanguage}>
+          {t.nav.toggle}
+        </button>
       </div>
     </div>
   );
 }
-
