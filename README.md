@@ -2,7 +2,7 @@
 
 > In the quantum realm, the house always loses... if you can maintain coherence.
 
-量智启学（Quantum Edu Platform）是一个面向量子计算启蒙、智能问答与游戏化学习的平台型项目。项目采用前后端分离结构，以 `FastAPI` 作为后端入口，以 `Vite + React` 作为前端承载界面，并将 RAG 智能问答系统、垂直领域量子自己是库、量子计算科普游戏统一整合到同一平台中，便于后续继续扩展知识库、学习路径推荐、量子后端能力以及更多交互式教学模块。
+量智启学（Quantum Edu Platform）是一个面向量子计算启蒙、智能问答与游戏化学习的平台型项目。项目采用前后端分离结构，以 `FastAPI` 作为后端入口，以 `Vite + React` 作为前端承载界面，并将 RAG 智能问答系统、垂直领域量子知识库、量子计算科普游戏统一整合到同一平台中，便于后续继续扩展知识库、学习路径推荐、量子后端能力以及更多交互式教学模块。
 
 当前版本有两个并行产品方向：一是面向知识学习和课程辅助的 RAG 智能问答系统，二是面向交互体验和概念理解的量子游戏模块。游戏不是平台的全部，而是帮助学生理解抽象概念的一种入口；智能问答、知识检索和学习辅助同样是平台的核心组成部分。
 
@@ -20,12 +20,14 @@
 ## 功能概览
 
 - **平台后端**：以 FastAPI 作为统一入口，负责承载服务编排、接口组织、RAG 问答、游戏状态桥接与后续能力扩展。
-- **平台前端**：以 React 构建平台页面，当前包含首页、问答页、游戏大厅和两个 Web 游戏界面。
+- **平台前端**：以 React 构建平台页面，当前包含首页、学习者知识库、问答页、游戏大厅和两个 Web 游戏界面。
 - **智能问答系统**：预留 `backend/rag` 与 `docs` 文档目录，当前已提供 ingest、retrieve、answer 的接口骨架，后续可接入文档清洗、向量检索、引用输出和模型回答。
 - **游戏整合**：已接入两套量子计算教育游戏 Demo，并通过 `/api/quantum-game` 接口统一管理状态。
 - **量子反馈**：Game 1 展示目标概率匹配，Game 2 使用 Qiskit backend 计算真实量子态 fidelity 并参与计分。
 - **游戏化学习**：提供规则页、分数拆解、商店、Joker、开包动画、roulette 风险等交互机制。
 - **知识扩展**：围绕 docs、RAG、问答页和学习解释层继续沉淀量子知识内容。
+- **账号与学习记忆**：支持注册、登录和学习偏好管理；登录后的 AI 问答会在相关时结合个人记忆。
+- **中英文界面**：首页、公共导航、AI 问答和账号页支持中英文切换。
 - **结构清晰**：以平台仓库为核心，将前端、后端、游戏子项目、文档统一组织，方便团队协作与后续迭代。
 
 ## 核心亮点
@@ -52,7 +54,9 @@ quantum-edu-platform/
     main.py                 # FastAPI 入口
     api/
       routes.py             # 通用 API 路由
+      auth_routes.py        # 注册、登录与学习记忆接口
       game_routes.py        # Web 游戏桥接接口
+    db.py                   # SQLite 用户、会话、记忆与问答历史
     rag/
       ingest.py             # 文档导入 / 向量化预留
       retriever.py          # 检索逻辑预留
@@ -62,12 +66,19 @@ quantum-edu-platform/
   frontend/
     src/
       App.jsx
+      auth.jsx              # 前端登录状态与鉴权请求
+      i18n.jsx              # 中英文界面文案
+      router.jsx            # 轻量 Hash 路由
       main.jsx
       pages/
         Home.jsx            # 首页
+        KnowledgeBase.jsx   # 学习者知识库首页与文章阅读页
         OAPage.jsx          # 问答页面
+        AccountPage.jsx     # 账号与学习记忆
         GamePage.jsx        # 游戏页面与交互逻辑
         GamePage.css        # 游戏页面样式
+      data/
+        knowledgeContent.js # 知识目录、文章状态与示例内容
       components/
         NavBar.jsx
     package.json
@@ -89,6 +100,8 @@ quantum-edu-platform/
 
 - `main.py`：平台后端启动入口，负责创建 FastAPI app、挂载 CORS、通用路由和游戏路由。
 - `api/routes.py`：通用 API 入口，包含健康检查、RAG 占位接口、量子能力占位接口等。
+- `api/auth_routes.py`：账号注册、登录、当前用户和学习记忆接口。
+- `db.py`：本地 SQLite 数据层，保存用户、会话、学习记忆与问答历史；数据库文件不会进入版本库。
 - `api/game_routes.py`：Web 游戏桥接层，负责游戏列表、启动、状态序列化、Game 1 电路操作、Game 2 卡牌操作等。
 - `rag/`：面向知识检索与问答链路的预留目录，当前作为结构占位，后续可逐步完善。
 - `requirements.txt`：后端依赖声明文件，包含 FastAPI、Uvicorn、Qiskit、Qiskit Aer。
@@ -96,7 +109,12 @@ quantum-edu-platform/
 ### frontend
 
 - `pages/Home.jsx`：平台首页，承担项目概览与入口展示。
+- `pages/KnowledgeBase.jsx`：面向学习者的知识库前台，包含六阶段学习目录、站内搜索、文章阅读、收藏、完成进度和游戏/问答入口。
+- `data/knowledgeContent.js`：知识库的前端内容模型。当前提供 21 个主题框架和 5 篇结构示例，后续可替换为后端 Markdown 内容接口。
 - `pages/OAPage.jsx`：问答页面，后续承载智能问答、知识检索与学习辅助能力。
+- `pages/AccountPage.jsx`：账号与个人学习记忆管理页面。
+- `auth.jsx`：保存登录状态，并为问答和记忆请求附加身份令牌。
+- `i18n.jsx`：首页、导航、问答与账号页的中英文文案。
 - `pages/GamePage.jsx`：游戏整合页，包含游戏大厅、两个游戏的主要界面、规则页、商店、开包动画和状态刷新逻辑。
 - `pages/GamePage.css`：游戏页面样式，包含工作台布局、卡牌、概率图、规则页、roulette、pack opening 等视觉效果。
 - `components/NavBar.jsx`：前端公共导航组件。
@@ -130,6 +148,19 @@ RAG 智能问答系统是量智启学的重要产品方向之一。它的目标�
 - 面向量子概念的分层解释，例如初学者解释、公式解释、实验/游戏关联解释。
 - 与游戏模块联动，在玩家卡关或结算后给出概念提示和学习路径建议。
 
+## 面向学习者的知识库
+
+知识库前台位于 `/#/knowledge`，承担“给学习者看”的课程资料与学习导航；`docs/quantum/` 则继续承担 RAG 原始语料与专业知识底座。两者分层维护，避免教学内容与检索资料混在一起。
+
+当前知识库框架包括：
+
+- 六阶段学习路径：认识量子、核心直觉、量子线路、经典算法、编程实践、游戏实验室。
+- 21 个主题目录，其中 5 篇提供可直接阅读的结构示例，其余提供统一的待整理文章骨架。
+- 桌面端固定目录与移动端抽屉目录。
+- 关键词搜索、文章收藏、完成状态和学习进度；收藏与进度暂存在浏览器本地。
+- 文章级章节导航、下一节推荐、AI 伴学入口和游戏知识回链。
+- 人工整理用内容大纲：`docs/knowledge-base-content-outline.md`。
+
 ## 当前游戏说明
 
 ### Game 1：Quantum Hacker
@@ -143,6 +174,11 @@ RAG 智能问答系统是量智启学的重要产品方向之一。它的目标�
 ## 快速开始（开发环境）
 
 需要分别启动后端和前端。建议先启动后端，再启动前端。
+
+环境要求：
+
+- Node.js 18 或更高版本。
+- Python 3.10 或更高版本（后端使用了现代类型标注语法，Python 3.8 无法直接运行）。
 
 ### 1. 启动后端（FastAPI）
 

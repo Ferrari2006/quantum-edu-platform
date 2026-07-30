@@ -1,10 +1,23 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes import router as api_router
+from backend.api.auth_routes import router as auth_router
 from backend.api.game_routes import router as game_router
+from backend.api.routes import router as api_router
+from backend.db import init_db
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+FRONTEND_INDEX = FRONTEND_DIST / "index.html"
+
+
 def create_app() -> FastAPI:
+    init_db()
     app = FastAPI(title="quantum-edu-platform")
 
     app.add_middleware(
@@ -15,12 +28,22 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.include_router(auth_router, prefix="/api")
     app.include_router(api_router, prefix="/api")
     # 将游戏相关的接口挂载到 /api/quantum-game 路径下
     app.include_router(game_router,prefix="/api/quantum-game",tags=["Quantum Game"])
 
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=FRONTEND_DIST / "assets"),
+            name="frontend-assets",
+        )
+
     @app.get("/", response_class=HTMLResponse)
     def home():
+        if FRONTEND_INDEX.exists():
+            return FileResponse(FRONTEND_INDEX)
         return """
         <!doctype html>
         <html lang="zh-CN">
