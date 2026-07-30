@@ -64,17 +64,39 @@ class LLMClient:
             used_chars += len(header) + len(text)
         return "\n\n".join(sections)
 
-    def generate(self, query: str, contexts: list[RetrievedChunk]) -> str:
+    def _memory_message(self, memories: list[dict] | None) -> str:
+        if not memories:
+            return ""
+        lines = []
+        for item in memories[:20]:
+            key = str(item.get("key", "")).strip()
+            value = str(item.get("value", "")).strip()
+            if key and value:
+                lines.append(f"- {key}: {value}")
+        if not lines:
+            return ""
+        return "User memory:\n" + "\n".join(lines) + "\n\n"
+
+    def generate(
+        self,
+        query: str,
+        contexts: list[RetrievedChunk],
+        memories: list[dict] | None = None,
+    ) -> str:
         context_text = self._context_message(contexts)
+        memory_text = self._memory_message(memories)
         messages = [
             {"role": "system", "content": GROUNDING_SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": (
+                    f"{memory_text}"
                     "Retrieved context:\n\n"
                     f"{context_text}\n\n"
                     f"Question: {query}\n\n"
-                    "Answer using only the retrieved context and include bracket citations."
+                    "Answer using the retrieved context. Personalize only when "
+                    "the user memory is relevant, and include bracket citations "
+                    "for factual claims from retrieved context."
                 ),
             },
         ]

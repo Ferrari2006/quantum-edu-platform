@@ -17,7 +17,11 @@ def serialize_context(item: RetrievedChunk) -> dict:
     }
 
 
-def answer(query: str, llm_client: LLMClient | None = None) -> dict:
+def answer(
+    query: str,
+    llm_client: LLMClient | None = None,
+    memories: list[dict] | None = None,
+) -> dict:
     normalized_query = (query or "").strip()
     contexts = retrieve(normalized_query)
     route = route_query(normalized_query)
@@ -34,7 +38,11 @@ def answer(query: str, llm_client: LLMClient | None = None) -> dict:
         }
 
     client = llm_client or LLMClient()
-    generated_answer = client.generate(normalized_query, contexts)
+    generated_answer = client.generate(
+        normalized_query,
+        contexts,
+        memories=memories,
+    )
     citations = [
         {
             "source": item.chunk.source,

@@ -1,6 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.api.auth_routes import get_optional_user
+from backend.db import list_memories, record_qa
 from backend.rag.chain import answer, serialize_context
 from backend.rag.ingest import ingest_docs, ingest_texts
 from backend.rag.llm import LLMConfigurationError, LLMServiceError
@@ -72,11 +76,22 @@ def rag_query(payload: QueryRequest):
 
 
 @router.post("/rag/ask")
-def rag_ask(payload: QueryRequest):
+def rag_ask(
+    payload: QueryRequest,
+    user: Annotated[dict | None, Depends(get_optional_user)] = None,
+):
     if not payload.query.strip():
         raise HTTPException(status_code=422, detail="query must not be empty")
+    memories = list_memories(user["id"]) if user else []
     try:
-        return answer(payload.query)
+        result = answer(payload.query, memories=memories)
+        record_qa(
+            user["id"] if user else None,
+            result["query"],
+            result["answer"],
+            result["route"],
+        )
+        return result
     except LLMConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except LLMServiceError as exc:
