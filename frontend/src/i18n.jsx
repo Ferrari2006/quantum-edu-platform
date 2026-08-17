@@ -66,6 +66,16 @@ export const copy = {
       authHint: "已登录，回答会在相关时结合你的学习记忆。",
       guestHint: "当前为访客模式，登录后可使用个人学习记忆。",
       requestFailed: "请求失败",
+      pipeline: "多智能体处理流程",
+      confidence: "置信度",
+      review: "审查",
+      status: {
+        completed: "完成",
+        passed: "通过",
+        needs_revision: "需要修正",
+        insufficient_context: "资料不足",
+        skipped: "已跳过",
+      },
     },
     account: {
       title: "账号与学习记忆",
@@ -155,6 +165,16 @@ export const copy = {
       authHint: "Signed in. Relevant learning memory can personalize answers.",
       guestHint: "Guest mode. Sign in to use personal learning memory.",
       requestFailed: "Request failed",
+      pipeline: "Multi-agent pipeline",
+      confidence: "Confidence",
+      review: "Review",
+      status: {
+        completed: "Completed",
+        passed: "Passed",
+        needs_revision: "Needs revision",
+        insufficient_context: "Insufficient context",
+        skipped: "Skipped",
+      },
     },
     account: {
       title: "Account & Learning Memory",

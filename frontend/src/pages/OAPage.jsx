@@ -46,6 +46,31 @@ function Contexts({ contexts = [], labels }) {
   );
 }
 
+function AgentTrace({ steps = [], labels }) {
+  if (!steps.length) return null;
+  return (
+    <details className="qa-details" open>
+      <summary>{labels.pipeline}</summary>
+      <div className="qa-agent-flow">
+        {steps.map((step, index) => (
+          <article
+            className="qa-agent-step"
+            data-status={step.status}
+            key={`${step.agent}-${index}`}
+          >
+            <div className="qa-agent-index">{index + 1}</div>
+            <div>
+              <strong>{step.label || step.agent}</strong>
+              <span>{labels.status[step.status] || step.status}</span>
+            </div>
+            <small>{step.duration_ms || 0} ms</small>
+          </article>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export default function OAPage() {
   const { t } = useLanguage();
   const { authHeaders, isAuthenticated } = useAuth();
@@ -53,6 +78,9 @@ export default function OAPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sessionId, setSessionId] = useState(
+    () => window.localStorage.getItem("quantum-rag-session") || "",
+  );
 
   async function onAsk() {
     if (!query.trim()) return;
@@ -62,11 +90,19 @@ export default function OAPage() {
       const resp = await fetch("/api/rag/ask", {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ query })
+        body: JSON.stringify({
+          query,
+          session_id: sessionId || undefined,
+          include_trace: true,
+        })
       });
       const data = await resp.json();
       if (!resp.ok) {
         throw new Error(data.detail || t.qa.requestFailed);
+      }
+      if (data.session_id) {
+        setSessionId(data.session_id);
+        window.localStorage.setItem("quantum-rag-session", data.session_id);
       }
       setResult(data);
     } catch (err) {
@@ -106,8 +142,18 @@ export default function OAPage() {
             <section className="qa-section">
               <div className="qa-section-kicker">{result.route || "answer"}</div>
               <h2>{t.qa.answer}</h2>
+              <div className="qa-answer-meta">
+                <span>{t.qa.confidence}: {result.confidence || "-"}</span>
+                <span>
+                  {t.qa.review}: {t.qa.status[result.review?.status] || result.review?.status || "-"}
+                </span>
+                {typeof result.response_time_ms === "number" ? (
+                  <span>{result.response_time_ms} ms</span>
+                ) : null}
+              </div>
               <div className="qa-answer">{result.answer}</div>
             </section>
+            <AgentTrace steps={result.agent_trace} labels={t.qa} />
             <Citations citations={result.citations} labels={t.qa} />
             <Contexts contexts={result.contexts} labels={t.qa} />
           </>

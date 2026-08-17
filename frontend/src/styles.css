@@ -296,6 +296,21 @@ body {
   color: #e5e7eb;
 }
 
+.qa-answer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #8da096;
+  font-size: 12px;
+}
+
+.qa-answer-meta span {
+  border: 1px solid #263244;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
 .qa-empty {
   color: #94a3b8;
 }
@@ -349,6 +364,60 @@ body {
 .qa-context-list {
   display: grid;
   gap: 10px;
+}
+
+.qa-agent-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.qa-agent-step {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #263244;
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.qa-agent-step[data-status="passed"],
+.qa-agent-step[data-status="completed"] {
+  border-color: #235e4a;
+}
+
+.qa-agent-step[data-status="needs_revision"],
+.qa-agent-step[data-status="insufficient_context"] {
+  border-color: #7c4d2a;
+}
+
+.qa-agent-index {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: #1b2b3c;
+  color: #d7e5dc;
+  font-size: 12px;
+}
+
+.qa-agent-step strong,
+.qa-agent-step span {
+  display: block;
+}
+
+.qa-agent-step strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.qa-agent-step span,
+.qa-agent-step small {
+  color: #94a3b8;
+  font-size: 11px;
 }
 
 .qa-context-head {
