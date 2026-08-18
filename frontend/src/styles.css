@@ -296,6 +296,66 @@ body {
   color: #e5e7eb;
 }
 
+.qa-mode-panel {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.45fr) 1fr;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 12px;
+  border: 1px solid #1f2937;
+  background: #0b1220;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.qa-mode-field {
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.qa-select,
+.qa-code-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #263244;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 9px;
+}
+
+.qa-select {
+  padding: 9px 10px;
+}
+
+.qa-mode-panel p {
+  margin: 0;
+  color: #8da096;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.qa-code-input {
+  min-height: 150px;
+  margin-bottom: 12px;
+  padding: 12px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.6;
+}
+
+.qa-context-note {
+  margin-bottom: 12px;
+  border: 1px solid #235e4a;
+  background: #0d211c;
+  color: #a7d7c5;
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .qa-answer-meta {
   display: flex;
   flex-wrap: wrap;
@@ -837,6 +897,11 @@ body {
 
   .qa-form {
     flex-direction: column;
+  }
+
+  .qa-mode-panel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .qa-button {

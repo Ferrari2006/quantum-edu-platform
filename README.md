@@ -113,7 +113,7 @@ quantum-edu-platform/
 - `pages/Home.jsx`：平台首页，承担项目概览与入口展示。
 - `pages/KnowledgeBase.jsx`：面向学习者的知识库前台，包含六阶段学习目录、站内搜索、文章阅读、收藏、完成进度和游戏/问答入口。
 - `data/knowledgeContent.js`：知识库的前端内容模型。当前提供 21 个主题框架和 5 篇结构示例，后续可替换为后端 Markdown 内容接口。
-- `pages/OAPage.jsx`：问答页面，后续承载智能问答、知识检索与学习辅助能力。
+- `pages/OAPage.jsx`：多智能体问答页面，支持任务模式选择、Qiskit 代码输入、当前游戏状态自动附带和处理流程展示。
 - `pages/AccountPage.jsx`：账号与个人学习记忆管理页面。
 - `auth.jsx`：保存登录状态，并为问答和记忆请求附加身份令牌。
 - `i18n.jsx`：首页、导航、问答与账号页的中英文文案。
@@ -143,7 +143,7 @@ RAG 智能问答系统是量智启学的重要产品方向之一。它的目标�
 - `backend/rag/agents.py`：检索、校验、生成、审查及一次修正回路。
 - `backend/rag/domain_tools.py`：不执行用户代码的 Qiskit AST 静态诊断。
 - `backend/rag/chain.py`：兼容原接口的多智能体问答编排入口。
-- `frontend/src/pages/OAPage.jsx`：展示回答、来源、审查状态和智能体处理流程。
+- `frontend/src/pages/OAPage.jsx`：展示回答、来源、审查状态和智能体处理流程，并提供概念、推导、代码纠错、游戏攻略和学习路径入口。
 - `/api/rag/ingest`、`/api/rag/query`、`/api/rag/ask`：后端问答相关 API 入口。
 
 详细设计、请求示例与当前限制见 [`docs/multi-agent-rag.md`](docs/multi-agent-rag.md)。
@@ -288,7 +288,7 @@ npm.cmd run build
 - 前端游戏页使用相对 API base：`/api/quantum-game`；本地开发时由 Vite proxy 转发到后端默认 `8000` 端口。
 - 后端游戏状态当前保存在进程内存中，刷新页面后可继续读取当前 active game，但重启后端会丢失状态。
 - `games/` 下保留了不同阶段的游戏原型。Web 版主要通过 `backend/api/game_routes.py` 接入核心逻辑。
-- `backend/rag/` 是智能问答系统的核心模块，目前提供多智能体 RAG MVP；下一阶段重点是扩充经过授权的权威语料、离线评测集和游戏状态自动联动。
+- `backend/rag/` 是智能问答系统的核心模块，目前提供多智能体 RAG MVP；问答页已能自动附带当前游戏状态，下一阶段重点是扩充经过授权的权威语料和离线评测集。
 - 当前仓库仍是“平台底座 + 多智能体 RAG MVP + 游戏原型整合”，并非最终产品形态。
 
 ## Roadmap

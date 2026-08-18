@@ -3,6 +3,55 @@ import { useState } from "react";
 import { useAuth } from "../auth.jsx";
 import { useLanguage } from "../i18n.jsx";
 
+const TASK_MODES = [
+  "auto",
+  "concept",
+  "derivation",
+  "code",
+  "game_strategy",
+  "learning_path",
+];
+
+const GAME_STATE_FIELDS = [
+  "active",
+  "game_id",
+  "kind",
+  "phase",
+  "level_index",
+  "level_count",
+  "level",
+  "hands_left",
+  "plays_left",
+  "discards_left",
+  "score",
+  "current_score",
+  "target_score",
+  "money",
+  "chips",
+  "ante",
+  "blind_index",
+  "num_qubits",
+  "gates",
+  "hand_cards",
+  "probabilities",
+  "preview",
+  "owned_jokers",
+  "jokers",
+  "blind_event",
+  "bonus_objective",
+  "recommendation",
+  "last_recap",
+  "last_score_breakdown",
+];
+
+function compactGameState(state) {
+  return Object.fromEntries(
+    GAME_STATE_FIELDS
+      .filter((key) => state[key] !== undefined)
+      .map((key) => [key, state[key]]),
+  );
+}
+
 function Citations({ citations = [], labels }) {
   if (!citations.length) return null;
   return (
@@ -78,6 +127,9 @@ export default function OAPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("auto");
+  const [code, setCode] = useState("");
+  const [contextNote, setContextNote] = useState("");
   const [sessionId, setSessionId] = useState(
     () => window.localStorage.getItem("quantum-rag-session") || "",
   );
@@ -86,12 +138,32 @@ export default function OAPage() {
     if (!query.trim()) return;
     setBusy(true);
     setError("");
+    setContextNote("");
     try {
+      let gameState;
+      if (mode === "game_strategy") {
+        const stateResp = await fetch("/api/quantum-game/state", {
+          headers: authHeaders(),
+        });
+        const stateData = await stateResp.json();
+        if (!stateResp.ok) {
+          throw new Error(stateData.detail || t.qa.gameStateFailed);
+        }
+        if (!stateData.active) {
+          throw new Error(t.qa.noActiveGame);
+        }
+        gameState = compactGameState(stateData);
+        setContextNote(t.qa.gameStateConnected);
+      }
+
       const resp = await fetch("/api/rag/ask", {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           query,
+          mode: mode === "auto" ? undefined : mode,
+          code: mode === "code" && code.trim() ? code : undefined,
+          game_state: gameState,
           session_id: sessionId || undefined,
           include_trace: true,
         })
@@ -124,6 +196,38 @@ export default function OAPage() {
       <div className="qa-auth-hint">
         {isAuthenticated ? t.qa.authHint : t.qa.guestHint}
       </div>
+      <div className="qa-mode-panel">
+        <label className="qa-mode-field">
+          <span>{t.qa.taskMode}</span>
+          <select
+            className="qa-select"
+            value={mode}
+            onChange={(event) => {
+              setMode(event.target.value);
+              setContextNote("");
+            }}
+          >
+            {TASK_MODES.map((item) => (
+              <option key={item} value={item}>{t.qa.modes[item]}</option>
+            ))}
+          </select>
+        </label>
+        <p>{t.qa.modeHints[mode]}</p>
+      </div>
+      {mode === "code" ? (
+        <textarea
+          className="qa-code-input"
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          placeholder={t.qa.codePlaceholder}
+          spellCheck="false"
+        />
+      ) : null}
+      {mode === "game_strategy" ? (
+        <div className="qa-context-note">
+          {contextNote || t.qa.gameStateHint}
+        </div>
+      ) : null}
       <form className="qa-form" onSubmit={onSubmit}>
         <input
           className="qa-input"
