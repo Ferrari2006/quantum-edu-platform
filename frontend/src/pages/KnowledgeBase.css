@@ -1751,6 +1751,17 @@
   color: #bad0c2;
 }
 
+.kb-full-profile-link {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  color: #c9f85d;
+  font-size: 10px;
+  font-weight: 800;
+  gap: 6px;
+  text-decoration: none;
+}
+
 @media (max-width: 760px) {
   .kb-insight-card {
     margin: 22px 12px 0;

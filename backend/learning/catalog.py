@@ -37,3 +37,54 @@ CONCEPT_CATALOG: list[Concept] = [
 ]
 
 CONCEPT_BY_ID = {concept["id"]: concept for concept in CONCEPT_CATALOG}
+
+# The first prerequisite graph is intentionally small and acyclic. A concept is
+# considered ready when every listed prerequisite has at least developing mastery.
+CONCEPT_PREREQUISITES: dict[str, list[str]] = {
+    "classical-bit-and-qubit": ["what-is-quantum-computing"],
+    "superposition": ["classical-bit-and-qubit"],
+    "phase-and-interference": ["superposition"],
+    "measurement": ["classical-bit-and-qubit"],
+    "bloch-sphere": ["classical-bit-and-qubit"],
+    "single-qubit-gates": ["superposition"],
+    "multi-qubit-and-cnot": ["single-qubit-gates"],
+    "bell-state": ["superposition", "multi-qubit-and-cnot"],
+    "read-a-circuit": ["single-qubit-gates"],
+    "deutsch-jozsa": ["phase-and-interference", "read-a-circuit"],
+    "grover-search": ["phase-and-interference", "read-a-circuit"],
+    "variational-algorithms": ["bloch-sphere", "read-a-circuit"],
+    "shor-overview": ["phase-and-interference", "read-a-circuit"],
+    "qiskit-first-step": ["read-a-circuit"],
+    "first-bell-circuit": ["qiskit-first-step", "bell-state"],
+    "noise-and-fidelity": ["qiskit-first-step"],
+    "quantum-hacker-guide": ["single-qubit-gates"],
+    "roulette-and-measurement": ["measurement"],
+    "quantum-mage-map": ["multi-qubit-and-cnot", "bloch-sphere"],
+}
+
+LAB_CONCEPTS = {
+    "superposition",
+    "phase-and-interference",
+    "measurement",
+    "bloch-sphere",
+    "single-qubit-gates",
+    "multi-qubit-and-cnot",
+    "bell-state",
+    "read-a-circuit",
+    "qiskit-first-step",
+    "first-bell-circuit",
+    "noise-and-fidelity",
+}
+
+GAME_CONCEPTS = {
+    "quantum-hacker-guide",
+    "roulette-and-measurement",
+    "quantum-mage-map",
+}
+
+AI_PRACTICE_CONCEPTS = {
+    "deutsch-jozsa",
+    "grover-search",
+    "variational-algorithms",
+    "shor-overview",
+}
