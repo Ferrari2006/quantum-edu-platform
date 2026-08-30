@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "../auth.jsx";
 import { useLanguage } from "../i18n.jsx";
@@ -133,6 +133,21 @@ export default function OAPage() {
   const [sessionId, setSessionId] = useState(
     () => window.localStorage.getItem("quantum-rag-session") || "",
   );
+
+  useEffect(() => {
+    const rawDraft = window.localStorage.getItem("quantum-lab-ai-draft");
+    if (!rawDraft) return;
+    try {
+      const draft = JSON.parse(rawDraft);
+      if (draft.query) setQuery(draft.query);
+      if (draft.code) setCode(draft.code);
+      setMode("code");
+    } catch {
+      // Ignore a malformed local draft and keep the normal empty form.
+    } finally {
+      window.localStorage.removeItem("quantum-lab-ai-draft");
+    }
+  }, []);
 
   async function onAsk() {
     if (!query.trim()) return;

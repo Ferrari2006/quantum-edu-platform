@@ -10,6 +10,7 @@
 | 02 | [RAG基础链路与知识来源](02-rag-foundation.md) | 已完成MVP |
 | 03 | [多智能体RAG问答](03-multi-agent-rag.md) | 已完成MVP |
 | 04 | [AI伴学入口与游戏联动](04-ai-tutor-and-game-integration.md) | 已完成MVP |
+| 05 | [图形化量子线路实验室](05-quantum-circuit-lab.md) | 已完成MVP |
 
 ## 长期上下文
 
