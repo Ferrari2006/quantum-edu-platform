@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useAuth } from "../auth.jsx";
 import {
   getKnowledgeArticle,
   getNextArticle,
@@ -223,7 +224,88 @@ function ModuleCard({ module, completed }) {
   );
 }
 
-function KnowledgeHome({ bookmarks, completed }) {
+function LearningInsights({ authHeaders, isAuthenticated, refreshKey }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setData(null);
+      setLoadError(false);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError(false);
+    fetch("/api/learning/recommendations?limit=4", {
+      headers: authHeaders(),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || "加载学习画像失败");
+        setData(payload);
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setLoadError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [authHeaders, isAuthenticated, refreshKey]);
+
+  if (!isAuthenticated) {
+    return (
+      <section className="kb-insight-card kb-insight-login">
+        <div>
+          <span>PERSONAL LEARNING LOOP</span>
+          <h2>登录后生成你的概念掌握图谱</h2>
+          <p>完成资料或运行量子实验后，平台会记录学习证据，并推荐下一步最值得巩固的主题。</p>
+        </div>
+        <Link to="/account">登录 / 注册 <Icon name="arrow" size={16} /></Link>
+      </section>
+    );
+  }
+
+  const summary = data?.summary;
+  return (
+    <section className="kb-insight-card">
+      <div className="kb-insight-heading">
+        <div>
+          <span>PERSONAL LEARNING LOOP</span>
+          <h2>你的学习画像与下一步</h2>
+        </div>
+        <div className="kb-mastery-score">
+          <strong>{summary ? Math.round(summary.average_mastery * 100) : 0}%</strong>
+          <small>平均掌握度</small>
+        </div>
+      </div>
+      {loadError && !data ? (
+        <p className="kb-insight-loading">暂时无法读取云端学习画像，本地阅读进度仍会正常保留。</p>
+      ) : loading && !data ? <p className="kb-insight-loading">正在整理学习证据…</p> : (
+        <>
+          <div className="kb-insight-stats">
+            <span><strong>{summary?.covered_concepts || 0}</strong> / {summary?.total_concepts || knowledgeArticles.length} 已覆盖概念</span>
+            <span><strong>{summary?.mastered_concepts || 0}</strong> 个概念达到熟练</span>
+          </div>
+          <div className="kb-recommendation-list">
+            {data?.items?.map((item, index) => (
+              <Link key={item.concept_id} to={`/knowledge/${item.article_id}`}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div><strong>{item.title}</strong><small>{item.reason}</small></div>
+                <Icon name="arrow" size={16} />
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function KnowledgeHome({ authHeaders, bookmarks, completed, isAuthenticated, masteryRefresh }) {
   const continueArticle =
     knowledgeArticles.find((article) => !completed.includes(article.id)) || knowledgeArticles[0];
   const sampleCount = knowledgeArticles.filter((article) => article.status === "sample").length;
@@ -253,6 +335,12 @@ function KnowledgeHome({ bookmarks, completed }) {
           <div><strong>{sampleCount}</strong><span>示例文章</span></div>
         </div>
       </section>
+
+      <LearningInsights
+        authHeaders={authHeaders}
+        isAuthenticated={isAuthenticated}
+        refreshKey={masteryRefresh}
+      />
 
       <section className="kb-home-section" id="learning-path">
         <div className="kb-section-heading">
@@ -451,11 +539,13 @@ function ArticleReader({ article, bookmarked, completed, onBookmark, onComplete 
 }
 
 export default function KnowledgeBase({ articleId = "" }) {
+  const { authHeaders, isAuthenticated } = useAuth();
   const locationPath = useHashLocation();
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [completed, setCompleted] = useState(() => readStoredList(STORAGE_KEYS.completed));
   const [bookmarks, setBookmarks] = useState(() => readStoredList(STORAGE_KEYS.bookmarks));
+  const [masteryRefresh, setMasteryRefresh] = useState(0);
   const article = articleId ? getKnowledgeArticle(articleId) : null;
 
   useEffect(() => {
@@ -475,6 +565,38 @@ export default function KnowledgeBase({ articleId = "" }) {
     });
   };
 
+  const toggleArticleCompletion = () => {
+    if (!article) return;
+    const alreadyCompleted = completed.includes(article.id);
+    toggleStoredItem(setCompleted, STORAGE_KEYS.completed, article.id);
+    if (alreadyCompleted || !isAuthenticated) return;
+
+    fetch("/api/learning/events", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        concept_id: article.id,
+        event_type: "article_completed",
+        source: "knowledge_base",
+        score: article.status === "sample" ? 0.72 : 0.6,
+        idempotency_key: `knowledge_base:${article.id}:completed`,
+        metadata: {
+          title: article.title,
+          module: article.moduleTitle,
+          difficulty: article.difficulty,
+          content_status: article.status,
+        },
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("学习进度同步失败");
+        setMasteryRefresh((value) => value + 1);
+      })
+      .catch(() => {
+        // Local completion remains available offline; the learning profile is optional.
+      });
+  };
+
   return (
     <div className="knowledge-shell">
       <KnowledgeSidebar
@@ -490,10 +612,16 @@ export default function KnowledgeBase({ articleId = "" }) {
             bookmarked={bookmarks.includes(article.id)}
             completed={completed.includes(article.id)}
             onBookmark={() => toggleStoredItem(setBookmarks, STORAGE_KEYS.bookmarks, article.id)}
-            onComplete={() => toggleStoredItem(setCompleted, STORAGE_KEYS.completed, article.id)}
+            onComplete={toggleArticleCompletion}
           />
         ) : (
-          <KnowledgeHome bookmarks={bookmarks} completed={completed} />
+          <KnowledgeHome
+            authHeaders={authHeaders}
+            bookmarks={bookmarks}
+            completed={completed}
+            isAuthenticated={isAuthenticated}
+            masteryRefresh={masteryRefresh}
+          />
         )}
       </main>
     </div>

@@ -11,6 +11,7 @@
 | 03 | [多智能体RAG问答](03-multi-agent-rag.md) | 已完成MVP |
 | 04 | [AI伴学入口与游戏联动](04-ai-tutor-and-game-integration.md) | 已完成MVP |
 | 05 | [图形化量子线路实验室](05-quantum-circuit-lab.md) | 已完成MVP |
+| 06 | [学习画像与教学推荐闭环](06-learning-profile-and-recommendations.md) | 已完成MVP |
 
 ## 长期上下文
 
