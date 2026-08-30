@@ -3,7 +3,7 @@ import { HashLink as Link } from "../router.jsx";
 
 export default function Home() {
   const { t } = useLanguage();
-  const entryLinks = ["/knowledge", "/oa", "/game"];
+  const entryLinks = ["/knowledge", "/oa", "/game", "/progress"];
 
   return (
     <div className="platform-home">

@@ -5,6 +5,7 @@ from pathlib import Path
 import backend.db as db
 from backend.learning.service import (
     build_learning_profile,
+    get_learning_timeline,
     get_recommendations,
     submit_learning_event,
 )
@@ -108,7 +109,43 @@ class LearningServiceTests(unittest.TestCase):
 
         self.assertEqual(result["items"][0]["concept_id"], "superposition")
         self.assertIn("40%", result["items"][0]["reason"])
+        self.assertEqual(result["items"][0]["actions"][1]["path"], "/lab")
         self.assertEqual(len(result["items"]), 3)
+
+    def test_prerequisites_unlock_next_concept(self):
+        submit_learning_event(
+            self.user["id"],
+            "what-is-quantum-computing",
+            "quiz_attempt",
+            "knowledge_quiz",
+            0.9,
+        )
+
+        result = get_recommendations(self.user["id"], limit=4)
+        classical = next(
+            item
+            for item in result["items"]
+            if item["concept_id"] == "classical-bit-and-qubit"
+        )
+        self.assertTrue(classical["ready"])
+        self.assertIn("前置概念", classical["reason"])
+
+    def test_profile_summarizes_evidence_and_mastery_levels(self):
+        submit_learning_event(
+            self.user["id"],
+            "measurement",
+            "quiz_attempt",
+            "knowledge_quiz",
+            0.3,
+        )
+        profile = build_learning_profile(self.user["id"])
+
+        self.assertEqual(profile["summary"]["total_evidence"], 1)
+        self.assertEqual(profile["summary"]["needs_review_concepts"], 1)
+        self.assertEqual(profile["concepts"][0]["mastery_level"], "needs_review")
+
+        timeline = get_learning_timeline(self.user["id"])
+        self.assertEqual(timeline["items"][0]["concept_title"], "测量：从概率到结果")
 
     def test_invalid_event_type_is_rejected(self):
         with self.assertRaises(ValueError):

@@ -7,7 +7,14 @@ from backend.db import (
     list_learning_events,
     record_learning_event,
 )
-from backend.learning.catalog import CONCEPT_BY_ID, CONCEPT_CATALOG
+from backend.learning.catalog import (
+    AI_PRACTICE_CONCEPTS,
+    CONCEPT_BY_ID,
+    CONCEPT_CATALOG,
+    CONCEPT_PREREQUISITES,
+    GAME_CONCEPTS,
+    LAB_CONCEPTS,
+)
 
 
 EVENT_WEIGHTS = {
@@ -71,6 +78,8 @@ def build_learning_profile(user_id: str) -> dict[str, Any]:
                 "title": concept["title"] if concept else item["concept_id"],
                 "module": concept["module"] if concept else "扩展学习",
                 "difficulty": concept["difficulty"] if concept else "自定义",
+                "mastery_level": _mastery_level(float(item["mastery_score"])),
+                "prerequisites": CONCEPT_PREREQUISITES.get(item["concept_id"], []),
             }
         )
     catalog_items = [item for item in enriched if item["concept_id"] in CONCEPT_BY_ID]
@@ -87,6 +96,10 @@ def build_learning_profile(user_id: str) -> dict[str, Any]:
             "mastered_concepts": sum(
                 1 for item in catalog_items if float(item["mastery_score"]) >= 0.75
             ),
+            "needs_review_concepts": sum(
+                1 for item in catalog_items if float(item["mastery_score"]) < 0.5
+            ),
+            "total_evidence": sum(int(item["evidence_count"]) for item in enriched),
         },
         "concepts": enriched,
     }
@@ -106,7 +119,13 @@ def get_recommendations(user_id: str, limit: int = 4) -> dict[str, Any]:
     unseen = [
         concept for concept in CONCEPT_CATALOG if concept["id"] not in mastery_by_id
     ]
-    candidates = weak + unseen
+    ready_unseen = [
+        concept for concept in unseen if _prerequisites_ready(concept["id"], mastery_by_id)
+    ]
+    blocked_unseen = [
+        concept for concept in unseen if concept not in ready_unseen
+    ]
+    candidates = weak + ready_unseen + blocked_unseen
     recommendations: list[dict[str, Any]] = []
     used: set[str] = set()
     for concept in candidates:
@@ -114,10 +133,23 @@ def get_recommendations(user_id: str, limit: int = 4) -> dict[str, Any]:
             continue
         used.add(concept["id"])
         mastery = mastery_by_id.get(concept["id"])
-        if mastery is None:
+        prerequisites = CONCEPT_PREREQUISITES.get(concept["id"], [])
+        missing_prerequisites = [
+            item for item in prerequisites if mastery_by_id.get(item, 0.0) < 0.55
+        ]
+        if mastery is None and prerequisites and not missing_prerequisites:
+            reason = "前置概念已经具备，可以进入这个主题"
+            reason_code = "prerequisites_ready"
+        elif mastery is None and missing_prerequisites:
+            names = [CONCEPT_BY_ID[item]["title"] for item in missing_prerequisites[:2]]
+            reason = f"建议先建立前置概念：{'、'.join(names)}"
+            reason_code = "prerequisites_missing"
+        elif mastery is None:
             reason = "尚未留下学习证据，建议按知识路径继续探索"
+            reason_code = "new_concept"
         else:
             reason = f"当前掌握度约 {round(mastery * 100)}%，建议结合资料与实验巩固"
+            reason_code = "weak_mastery"
         recommendations.append(
             {
                 "concept_id": concept["id"],
@@ -127,6 +159,14 @@ def get_recommendations(user_id: str, limit: int = 4) -> dict[str, Any]:
                 "difficulty": concept["difficulty"],
                 "mastery_score": mastery,
                 "reason": reason,
+                "reason_code": reason_code,
+                "prerequisites": prerequisites,
+                "missing_prerequisites": missing_prerequisites,
+                "missing_prerequisite_titles": [
+                    CONCEPT_BY_ID[item]["title"] for item in missing_prerequisites
+                ],
+                "ready": not missing_prerequisites,
+                "actions": _recommendation_actions(concept["id"]),
             }
         )
         if len(recommendations) >= max(1, min(limit, 8)):
@@ -135,4 +175,40 @@ def get_recommendations(user_id: str, limit: int = 4) -> dict[str, Any]:
 
 
 def get_learning_timeline(user_id: str, limit: int = 50) -> dict[str, Any]:
-    return {"items": list_learning_events(user_id, max(1, min(limit, 100)))}
+    items = list_learning_events(user_id, max(1, min(limit, 100)))
+    for item in items:
+        concept = CONCEPT_BY_ID.get(item["concept_id"])
+        item["concept_title"] = concept["title"] if concept else item["concept_id"]
+    return {"items": items}
+
+
+def _mastery_level(score: float) -> str:
+    if score >= 0.75:
+        return "mastered"
+    if score >= 0.5:
+        return "developing"
+    return "needs_review"
+
+
+def _prerequisites_ready(concept_id: str, mastery_by_id: dict[str, float]) -> bool:
+    return all(
+        mastery_by_id.get(prerequisite, 0.0) >= 0.55
+        for prerequisite in CONCEPT_PREREQUISITES.get(concept_id, [])
+    )
+
+
+def _recommendation_actions(concept_id: str) -> list[dict[str, str]]:
+    actions = [
+        {
+            "kind": "article",
+            "label": "阅读或复习主题",
+            "path": f"/knowledge/{concept_id}",
+        }
+    ]
+    if concept_id in LAB_CONCEPTS:
+        actions.append({"kind": "lab", "label": "在线路实验室验证", "path": "/lab"})
+    elif concept_id in GAME_CONCEPTS:
+        actions.append({"kind": "game", "label": "进入游戏实验场", "path": "/game"})
+    elif concept_id in AI_PRACTICE_CONCEPTS:
+        actions.append({"kind": "ai", "label": "让AI分步讲解", "path": "/oa"})
+    return actions

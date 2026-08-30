@@ -7,6 +7,7 @@ import KnowledgeBase from "./pages/KnowledgeBase.jsx";
 import OAPage from "./pages/OAPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
 import QuantumLab from "./pages/QuantumLab.jsx";
+import LearningProgressPage from "./pages/LearningProgressPage.jsx";
 import { HashLink as Link, useHashLocation } from "./router.jsx";
 
 function AppContent() {
@@ -27,6 +28,8 @@ function AppContent() {
     page = <QuantumLab />;
   } else if (path === "/account") {
     page = <AccountPage />;
+  } else if (path === "/progress") {
+    page = <LearningProgressPage />;
   } else {
     page = (
       <div>

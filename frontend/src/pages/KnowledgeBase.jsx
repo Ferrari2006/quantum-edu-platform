@@ -301,6 +301,7 @@ function LearningInsights({ authHeaders, isAuthenticated, refreshKey }) {
               </Link>
             ))}
           </div>
+          <Link className="kb-full-profile-link" to="/progress">查看完整学习档案 <Icon name="arrow" size={15} /></Link>
         </>
       )}
     </section>
