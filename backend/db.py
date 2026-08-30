@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent / "data" / "platform.db"
@@ -28,12 +30,20 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_connection() -> sqlite3.Connection:
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
@@ -72,14 +82,34 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS qa_history (
                 id TEXT PRIMARY KEY,
                 user_id TEXT,
+                session_id TEXT,
                 query TEXT NOT NULL,
                 answer TEXT,
                 route TEXT,
+                review_status TEXT,
+                metadata_json TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             );
             """
         )
+        _ensure_column(conn, "qa_history", "session_id", "TEXT")
+        _ensure_column(conn, "qa_history", "review_status", "TEXT")
+        _ensure_column(conn, "qa_history", "metadata_json", "TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_qa_history_session ON qa_history(session_id, created_at)"
+        )
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -257,20 +287,66 @@ def record_qa(
     query: str,
     answer: str | None,
     route: str | None,
+    *,
+    session_id: str | None = None,
+    review_status: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO qa_history
-                (id, user_id, query, answer, route, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (id, user_id, session_id, query, answer, route,
+                 review_status, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 secrets.token_urlsafe(12),
                 user_id,
+                session_id,
                 query,
                 answer,
                 route,
+                review_status,
+                json.dumps(metadata or {}, ensure_ascii=False),
                 utc_now(),
             ),
         )
+
+
+def list_qa_history(
+    session_id: str,
+    user_id: str | None = None,
+) -> list[dict[str, Any]]:
+    ownership_clause = "user_id = ?" if user_id else "user_id IS NULL"
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, session_id, query, answer, route, review_status,
+                   metadata_json, created_at
+            FROM qa_history
+            WHERE session_id = ? AND {ownership_clause}
+            ORDER BY created_at ASC
+            """,
+            (session_id, user_id) if user_id else (session_id,),
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        raw_metadata = item.pop("metadata_json", None)
+        try:
+            item["metadata"] = json.loads(raw_metadata) if raw_metadata else {}
+        except json.JSONDecodeError:
+            item["metadata"] = {}
+        items.append(item)
+    return items
+
+
+def clear_qa_history(session_id: str, user_id: str | None = None) -> int:
+    ownership_clause = "user_id = ?" if user_id else "user_id IS NULL"
+    with get_connection() as conn:
+        cursor = conn.execute(
+            f"DELETE FROM qa_history WHERE session_id = ? AND {ownership_clause}",
+            (session_id, user_id) if user_id else (session_id,),
+        )
+    return cursor.rowcount

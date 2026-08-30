@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+import json
 from typing import Any
 
 from backend.rag.config import settings
-from backend.rag.prompts import GROUNDING_SYSTEM_PROMPT
-from backend.rag.schema import RetrievedChunk
+from backend.rag.prompts import GROUNDING_SYSTEM_PROMPT, ROUTE_INSTRUCTIONS
+from backend.rag.schema import QueryRoute, RetrievedChunk
 
 
 class LLMConfigurationError(RuntimeError):
@@ -77,29 +80,13 @@ class LLMClient:
             return ""
         return "User memory:\n" + "\n".join(lines) + "\n\n"
 
-    def generate(
-        self,
-        query: str,
-        contexts: list[RetrievedChunk],
-        memories: list[dict] | None = None,
-    ) -> str:
-        context_text = self._context_message(contexts)
-        memory_text = self._memory_message(memories)
-        messages = [
-            {"role": "system", "content": GROUNDING_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": (
-                    f"{memory_text}"
-                    "Retrieved context:\n\n"
-                    f"{context_text}\n\n"
-                    f"Question: {query}\n\n"
-                    "Answer using the retrieved context. Personalize only when "
-                    "the user memory is relevant, and include bracket citations "
-                    "for factual claims from retrieved context."
-                ),
-            },
-        ]
+    def _task_context_message(self, task_context: dict[str, Any] | None) -> str:
+        if not task_context:
+            return ""
+        serialized = json.dumps(task_context, ensure_ascii=False, default=str)
+        return f"Structured task context (user supplied):\n{serialized[:6000]}\n\n"
+
+    def _complete(self, messages: list[dict[str, str]]) -> str:
         try:
             response = self._client.chat.completions.create(
                 model=self.model,
@@ -113,3 +100,63 @@ class LLMClient:
         if not content or not content.strip():
             raise LLMServiceError("The configured chat model returned an empty response.")
         return content.strip()
+
+    def generate(
+        self,
+        query: str,
+        contexts: list[RetrievedChunk],
+        memories: list[dict] | None = None,
+        route: QueryRoute = "concept",
+        task_context: dict[str, Any] | None = None,
+    ) -> str:
+        context_text = self._context_message(contexts)
+        memory_text = self._memory_message(memories)
+        task_context_text = self._task_context_message(task_context)
+        route_instruction = ROUTE_INSTRUCTIONS.get(route, ROUTE_INSTRUCTIONS["concept"])
+        messages = [
+            {"role": "system", "content": GROUNDING_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"{memory_text}"
+                    f"{task_context_text}"
+                    "Retrieved context:\n\n"
+                    f"{context_text}\n\n"
+                    f"Question: {query}\n\n"
+                    f"Task style: {route_instruction}\n"
+                    "Answer using the retrieved context. Personalize only when "
+                    "the user memory is relevant, and include bracket citations "
+                    "for factual claims from retrieved context."
+                ),
+            },
+        ]
+        return self._complete(messages)
+
+    def revise(
+        self,
+        query: str,
+        answer: str,
+        contexts: list[RetrievedChunk],
+        issues: list[str],
+        memories: list[dict] | None = None,
+        route: QueryRoute = "concept",
+        task_context: dict[str, Any] | None = None,
+    ) -> str:
+        messages = [
+            {"role": "system", "content": GROUNDING_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"{self._memory_message(memories)}"
+                    f"{self._task_context_message(task_context)}"
+                    f"Retrieved context:\n\n{self._context_message(contexts)}\n\n"
+                    f"Question: {query}\n\n"
+                    f"Draft answer:\n{answer}\n\n"
+                    f"Review issues: {', '.join(issues)}\n\n"
+                    f"Task style: {ROUTE_INSTRUCTIONS.get(route, ROUTE_INSTRUCTIONS['concept'])}\n"
+                    "Rewrite the complete answer. Resolve every review issue, retain only "
+                    "claims supported by the numbered context, and use valid bracket citations."
+                ),
+            },
+        ]
+        return self._complete(messages)

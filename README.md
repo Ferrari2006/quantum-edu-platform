@@ -21,7 +21,7 @@
 
 - **平台后端**：以 FastAPI 作为统一入口，负责承载服务编排、接口组织、RAG 问答、游戏状态桥接与后续能力扩展。
 - **平台前端**：以 React 构建平台页面，当前包含首页、学习者知识库、问答页、游戏大厅和两个 Web 游戏界面。
-- **智能问答系统**：预留 `backend/rag` 与 `docs` 文档目录，当前已提供 ingest、retrieve、answer 的接口骨架，后续可接入文档清洗、向量检索、引用输出和模型回答。
+- **智能问答系统**：已实现“检索—校验—生成—审查”的多智能体 RAG 流水线，支持来源重排、引用检查、一次自动修正、会话历史与流程追踪。
 - **游戏整合**：已接入两套量子计算教育游戏 Demo，并通过 `/api/quantum-game` 接口统一管理状态。
 - **量子反馈**：Game 1 展示目标概率匹配，Game 2 使用 Qiskit backend 计算真实量子态 fidelity 并参与计分。
 - **游戏化学习**：提供规则页、分数拆解、商店、Joker、开包动画、roulette 风险等交互机制。
@@ -60,7 +60,9 @@ quantum-edu-platform/
     rag/
       ingest.py             # 文档导入 / 向量化预留
       retriever.py          # 检索逻辑预留
-      chain.py              # 问答链路预留
+      agents.py             # 检索、校验、生成、审查智能体
+      chain.py              # 多智能体问答编排入口
+      domain_tools.py       # Qiskit 安全静态诊断
     requirements.txt
 
   frontend/
@@ -91,6 +93,7 @@ quantum-edu-platform/
                             # 卡牌游戏状态机与 quantum backend
 
   docs/                     # 量子知识库文档 / 项目资料
+    development-log/        # 分阶段开发记录与长期项目上下文
   README.md
 ```
 
@@ -103,7 +106,7 @@ quantum-edu-platform/
 - `api/auth_routes.py`：账号注册、登录、当前用户和学习记忆接口。
 - `db.py`：本地 SQLite 数据层，保存用户、会话、学习记忆与问答历史；数据库文件不会进入版本库。
 - `api/game_routes.py`：Web 游戏桥接层，负责游戏列表、启动、状态序列化、Game 1 电路操作、Game 2 卡牌操作等。
-- `rag/`：面向知识检索与问答链路的预留目录，当前作为结构占位，后续可逐步完善。
+- `rag/`：面向量子计算的混合检索、多智能体问答、引用校验与领域工具实现。
 - `requirements.txt`：后端依赖声明文件，包含 FastAPI、Uvicorn、Qiskit、Qiskit Aer。
 
 ### frontend
@@ -111,7 +114,7 @@ quantum-edu-platform/
 - `pages/Home.jsx`：平台首页，承担项目概览与入口展示。
 - `pages/KnowledgeBase.jsx`：面向学习者的知识库前台，包含六阶段学习目录、站内搜索、文章阅读、收藏、完成进度和游戏/问答入口。
 - `data/knowledgeContent.js`：知识库的前端内容模型。当前提供 21 个主题框架和 5 篇结构示例，后续可替换为后端 Markdown 内容接口。
-- `pages/OAPage.jsx`：问答页面，后续承载智能问答、知识检索与学习辅助能力。
+- `pages/OAPage.jsx`：多智能体问答页面，支持任务模式选择、Qiskit 代码输入、当前游戏状态自动附带和处理流程展示。
 - `pages/AccountPage.jsx`：账号与个人学习记忆管理页面。
 - `auth.jsx`：保存登录状态，并为问答和记忆请求附加身份令牌。
 - `i18n.jsx`：首页、导航、问答与账号页的中英文文案。
@@ -127,19 +130,26 @@ quantum-edu-platform/
 ### docs
 
 - 用于存放知识库素材、项目文档、说明资料以及后续 RAG 相关文本来源。
+- `docs/development-log/` 持续记录各阶段目标、实现、验证、限制和版本信息；新阶段可复制其中的 `TEMPLATE.md`。
+- `docs/system-boundaries-and-roadmap.md` 说明游戏接入、量子测试、图形化线路实验室与教学路线的边界。
 
 ## 智能问答与知识系统
 
 RAG 智能问答系统是量智启学的重要产品方向之一。它的目标不是简单做一个聊天入口，而是围绕量子计算学习场景，提供可检索、可解释、可扩展的知识辅助能力。
 
-当前仓库已经预留了基础结构：
+当前仓库已经实现了第一版可运行结构：
 
 - `docs/`：用于沉淀量子知识文档、课程资料、项目说明和后续知识库来源。
 - `backend/rag/ingest.py`：文档导入与清洗流程的接口位置。
-- `backend/rag/retriever.py`：检索逻辑的接口位置。
-- `backend/rag/chain.py`：问答生成链路的接口位置。
-- `frontend/src/pages/OAPage.jsx`：前端问答页面入口。
+- `backend/rag/retriever.py`：关键词、向量或混合检索。
+- `backend/rag/reranker.py`：相关性、来源权威度与重复内容校验。
+- `backend/rag/agents.py`：检索、校验、生成、审查及一次修正回路。
+- `backend/rag/domain_tools.py`：不执行用户代码的 Qiskit AST 静态诊断。
+- `backend/rag/chain.py`：兼容原接口的多智能体问答编排入口。
+- `frontend/src/pages/OAPage.jsx`：展示回答、来源、审查状态和智能体处理流程，并提供概念、推导、代码纠错、游戏攻略和学习路径入口。
 - `/api/rag/ingest`、`/api/rag/query`、`/api/rag/ask`：后端问答相关 API 入口。
+
+详细设计、请求示例与当前限制见 [`docs/multi-agent-rag.md`](docs/multi-agent-rag.md)。
 
 后续可以在这个方向上继续扩展：
 
@@ -253,6 +263,8 @@ GET  /api/v1/health-data
 POST /api/rag/ingest
 POST /api/rag/query
 POST /api/rag/ask
+GET  /api/rag/history/{session_id}
+DELETE /api/rag/history/{session_id}
 ```
 
 ### 游戏桥接接口
@@ -279,13 +291,18 @@ npm.cmd run build
 - 前端游戏页使用相对 API base：`/api/quantum-game`；本地开发时由 Vite proxy 转发到后端默认 `8000` 端口。
 - 后端游戏状态当前保存在进程内存中，刷新页面后可继续读取当前 active game，但重启后端会丢失状态。
 - `games/` 下保留了不同阶段的游戏原型。Web 版主要通过 `backend/api/game_routes.py` 接入核心逻辑。
-- `backend/rag/` 是智能问答系统的核心预留模块，目前提供最小接口骨架，后续重点是补齐文档处理、检索和回答链路。
-- 当前仓库仍偏向“平台底座 + RAG 骨架 + 游戏原型整合”，并非最终产品形态。
+- `backend/rag/` 是智能问答系统的核心模块，目前提供多智能体 RAG MVP；问答页已能自动附带当前游戏状态，下一阶段重点是扩充经过授权的权威语料和离线评测集。
+- 当前仓库仍是“平台底座 + 多智能体 RAG MVP + 游戏原型整合”，并非最终产品形态。
 
 ## Roadmap
 
-- [ ] 完善 RAG 知识库构建流程：文档清洗、分块、向量化、检索、引用输出。
-- [ ] 完善智能问答体验：问题改写、上下文引用、分层解释、前端问答交互。
+- [x] 建立 RAG 基础流程：文档分块、向量/关键词混合检索、来源重排与引用输出。
+- [x] 建立多智能体 MVP：检索、校验、生成、审查和一次自动修正。
+- [x] 建立分阶段开发记录、项目上下文和后续记录模板。
+- [ ] 建立离线评测集：检索命中率、引用正确率、事实性和任务完成度。
+- [ ] 完善智能问答体验：问题改写、流式输出、公式渲染和多轮对话摘要。
+- [ ] 将学习内容、问答、练习和游戏表现汇总为概念掌握度与教学推荐闭环。
+- [ ] 实现通用量子运行接口，并在此基础上建设图形化量子线路实验室。
 - [ ] 建立量子知识内容体系：基础概念、量子门、电路、纠缠、测量、算法入门等。
 - [ ] 打通“知识问答 ↔ 游戏反馈”的闭环，让游戏中的操作和卡关点能够触发学习解释。
 - [ ] 将量子后端能力抽象为可复用模块或服务：电路执行、fidelity、噪声模型。
