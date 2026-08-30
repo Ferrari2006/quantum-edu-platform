@@ -1276,6 +1276,16 @@ body {
   font-size: 9px;
 }
 
+.ql-metrics .ql-learning-synced {
+  border-color: #477b59;
+  color: #a5e8b7;
+}
+
+.ql-metrics .ql-learning-failed {
+  border-color: #75453c;
+  color: #dda89b;
+}
+
 .ql-code-card pre {
   min-height: 210px;
   max-height: 380px;

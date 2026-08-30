@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { useAuth } from "../auth.jsx";
 import { useLanguage } from "../i18n.jsx";
 import { navigateTo } from "../router.jsx";
 
@@ -94,7 +95,21 @@ function OperationCell({ operation, qubit }) {
   return <span className="ql-op ql-op-controlled">{operation.gate}</span>;
 }
 
+function inferLearningConcepts(operations, target) {
+  const concepts = new Set();
+  const gates = operations.map((operation) => operation.gate);
+  if (gates.includes("H")) concepts.add("superposition");
+  if (gates.some((gate) => ["RX", "RY", "RZ"].includes(gate))) concepts.add("bloch-sphere");
+  if (gates.some((gate) => ["CX", "CZ", "SWAP"].includes(gate))) {
+    concepts.add(target === "bell" ? "bell-state" : "multi-qubit-and-cnot");
+  }
+  if (!concepts.size && gates.length) concepts.add("single-qubit-gates");
+  if (!concepts.size) concepts.add("read-a-circuit");
+  return [...concepts].slice(0, 3);
+}
+
 export default function QuantumLab() {
+  const { authHeaders, isAuthenticated } = useAuth();
   const { t } = useLanguage();
   const [numQubits, setNumQubits] = useState(2);
   const [operations, setOperations] = useState([]);
@@ -106,6 +121,7 @@ export default function QuantumLab() {
   const [fidelity, setFidelity] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [learningSync, setLearningSync] = useState("idle");
 
   const qiskitCode = result?.qiskit_code || localQiskitCode(numQubits, operations);
   const targetOptions = useMemo(
@@ -124,6 +140,7 @@ export default function QuantumLab() {
     setResult(null);
     setFidelity(null);
     setError("");
+    setLearningSync("idle");
   }
 
   function chooseGate(item) {
@@ -192,6 +209,35 @@ export default function QuantumLab() {
       const [runResult, fidelityResult] = await Promise.all([runPromise, fidelityPromise]);
       setResult(runResult);
       setFidelity(fidelityResult);
+      if (isAuthenticated) {
+        setLearningSync("syncing");
+        const evidenceScore = fidelityResult?.fidelity ?? Math.min(0.55 + operations.length * 0.03, 0.85);
+        const concepts = inferLearningConcepts(operations, target);
+        Promise.all(
+          concepts.map((conceptId) => fetch("/api/learning/events", {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              concept_id: conceptId,
+              event_type: "lab_completed",
+              source: "quantum_lab",
+              score: evidenceScore,
+              metadata: {
+                num_qubits: numQubits,
+                gate_count: operations.length,
+                gates: operations.map((operation) => operation.gate),
+                target,
+                fidelity: fidelityResult?.fidelity ?? null,
+              },
+            }),
+          }).then((response) => {
+            if (!response.ok) throw new Error("Learning sync failed");
+            return response.json();
+          })),
+        )
+          .then(() => setLearningSync("synced"))
+          .catch(() => setLearningSync("failed"));
+      }
     } catch (runError) {
       setError(runError.message || t.lab.runFailed);
     } finally {
@@ -363,6 +409,9 @@ export default function QuantumLab() {
               <span>{t.lab.depth}: {result.metrics.depth}</span>
               <span>{t.lab.operations}: {result.metrics.operation_count}</span>
               <span>{t.lab.engine}: Statevector</span>
+              {learningSync === "syncing" ? <span>{t.lab.learningSyncing}</span> : null}
+              {learningSync === "synced" ? <span className="ql-learning-synced">{t.lab.learningSynced}</span> : null}
+              {learningSync === "failed" ? <span className="ql-learning-failed">{t.lab.learningSyncFailed}</span> : null}
             </div>
           ) : null}
         </div>

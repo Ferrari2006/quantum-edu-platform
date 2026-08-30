@@ -91,6 +91,32 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             );
+
+            CREATE TABLE IF NOT EXISTS learning_events (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                concept_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                source TEXT NOT NULL,
+                score REAL NOT NULL,
+                evidence_weight REAL NOT NULL,
+                metadata_json TEXT,
+                idempotency_key TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS concept_mastery (
+                user_id TEXT NOT NULL,
+                concept_id TEXT NOT NULL,
+                mastery_score REAL NOT NULL,
+                evidence_count INTEGER NOT NULL,
+                evidence_weight REAL NOT NULL,
+                last_event_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, concept_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
             """
         )
         _ensure_column(conn, "qa_history", "session_id", "TEXT")
@@ -98,6 +124,16 @@ def init_db() -> None:
         _ensure_column(conn, "qa_history", "metadata_json", "TEXT")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_qa_history_session ON qa_history(session_id, created_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_learning_events_user ON learning_events(user_id, created_at DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_learning_events_concept ON learning_events(user_id, concept_id, created_at DESC)"
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_events_idempotency "
+            "ON learning_events(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL"
         )
 
 
@@ -350,3 +386,140 @@ def clear_qa_history(session_id: str, user_id: str | None = None) -> int:
             (session_id, user_id) if user_id else (session_id,),
         )
     return cursor.rowcount
+
+
+def record_learning_event(
+    user_id: str,
+    concept_id: str,
+    event_type: str,
+    source: str,
+    score: float,
+    evidence_weight: float,
+    *,
+    metadata: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Persist one piece of learning evidence and update aggregate mastery atomically."""
+    event_id = secrets.token_urlsafe(12)
+    now = utc_now()
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT OR IGNORE INTO learning_events
+                (id, user_id, concept_id, event_type, source, score,
+                 evidence_weight, metadata_json, idempotency_key, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                user_id,
+                concept_id,
+                event_type,
+                source,
+                score,
+                evidence_weight,
+                json.dumps(metadata or {}, ensure_ascii=False),
+                idempotency_key,
+                now,
+            ),
+        )
+        created = cursor.rowcount > 0
+        if not created and idempotency_key:
+            existing = conn.execute(
+                """
+                SELECT * FROM learning_events
+                WHERE user_id = ? AND idempotency_key = ?
+                """,
+                (user_id, idempotency_key),
+            ).fetchone()
+            return _learning_event_to_dict(existing, created=False)
+
+        current = conn.execute(
+            """
+            SELECT mastery_score, evidence_count, evidence_weight
+            FROM concept_mastery
+            WHERE user_id = ? AND concept_id = ?
+            """,
+            (user_id, concept_id),
+        ).fetchone()
+        previous_weight = float(current["evidence_weight"]) if current else 0.0
+        previous_score = float(current["mastery_score"]) if current else 0.0
+        total_weight = previous_weight + evidence_weight
+        mastery_score = (
+            (previous_score * previous_weight + score * evidence_weight) / total_weight
+            if total_weight
+            else score
+        )
+        conn.execute(
+            """
+            INSERT INTO concept_mastery
+                (user_id, concept_id, mastery_score, evidence_count,
+                 evidence_weight, last_event_at, updated_at)
+            VALUES (?, ?, ?, 1, ?, ?, ?)
+            ON CONFLICT(user_id, concept_id) DO UPDATE SET
+                mastery_score = excluded.mastery_score,
+                evidence_count = concept_mastery.evidence_count + 1,
+                evidence_weight = excluded.evidence_weight,
+                last_event_at = excluded.last_event_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                user_id,
+                concept_id,
+                mastery_score,
+                total_weight,
+                now,
+                now,
+            ),
+        )
+        event = conn.execute(
+            "SELECT * FROM learning_events WHERE id = ?",
+            (event_id,),
+        ).fetchone()
+    return _learning_event_to_dict(event, created=True)
+
+
+def _learning_event_to_dict(
+    row: sqlite3.Row | None,
+    *,
+    created: bool,
+) -> dict[str, Any]:
+    if row is None:
+        return {"created": created}
+    item = dict(row)
+    raw_metadata = item.pop("metadata_json", None)
+    try:
+        item["metadata"] = json.loads(raw_metadata) if raw_metadata else {}
+    except json.JSONDecodeError:
+        item["metadata"] = {}
+    item["created"] = created
+    return item
+
+
+def list_learning_events(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM learning_events
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+    return [_learning_event_to_dict(row, created=True) for row in rows]
+
+
+def list_concept_mastery(user_id: str) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT concept_id, mastery_score, evidence_count, evidence_weight,
+                   last_event_at, updated_at
+            FROM concept_mastery
+            WHERE user_id = ?
+            ORDER BY mastery_score ASC, updated_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
