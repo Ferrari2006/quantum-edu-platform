@@ -12,6 +12,7 @@
 | 04 | [AI伴学入口与游戏联动](04-ai-tutor-and-game-integration.md) | 已完成MVP |
 | 05 | [图形化量子线路实验室](05-quantum-circuit-lab.md) | 已完成MVP |
 | 06 | [学习画像与教学推荐闭环](06-learning-profile-and-recommendations.md) | 已完成MVP |
+| 07 | [概念小测与游戏学习证据](07-assessments-and-game-evidence.md) | 已完成MVP |
 
 ## 长期上下文
 

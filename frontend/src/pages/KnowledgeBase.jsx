@@ -7,6 +7,8 @@ import {
   knowledgeArticles,
   knowledgeModules,
 } from "../data/knowledgeContent.js";
+import { getKnowledgeQuiz } from "../data/knowledgeQuizzes.js";
+import { calculateQuizResult } from "../utils/learningEvidence.js";
 import {
   HashLink as Link,
   HashNavLink as NavLink,
@@ -416,7 +418,129 @@ function KnowledgeHome({ authHeaders, bookmarks, completed, isAuthenticated, mas
   );
 }
 
-function ArticleReader({ article, bookmarked, completed, onBookmark, onComplete }) {
+function ArticleQuiz({ article, authHeaders, isAuthenticated, onMasteryRecorded }) {
+  const questions = getKnowledgeQuiz(article.id);
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+  const [syncState, setSyncState] = useState("idle");
+
+  useEffect(() => {
+    setAnswers({});
+    setSubmitted(false);
+    setScore(0);
+    setSyncState("idle");
+  }, [article.id]);
+
+  if (!questions.length) return null;
+  const answeredCount = Object.keys(answers).length;
+
+  const submitQuiz = () => {
+    if (answeredCount !== questions.length) return;
+    const result = calculateQuizResult(questions, answers);
+    const correct = result.correctCount;
+    const nextScore = result.score;
+    setScore(nextScore);
+    setSubmitted(true);
+    if (!isAuthenticated) return;
+
+    setSyncState("syncing");
+    fetch("/api/learning/events", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        concept_id: article.id,
+        event_type: "quiz_attempt",
+        source: "knowledge_quiz",
+        score: nextScore,
+        metadata: {
+          title: article.title,
+          question_count: questions.length,
+          correct_count: correct,
+          answers,
+        },
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("小测结果同步失败");
+        setSyncState("synced");
+        onMasteryRecorded();
+      })
+      .catch(() => setSyncState("failed"));
+  };
+
+  const retryQuiz = () => {
+    setAnswers({});
+    setSubmitted(false);
+    setScore(0);
+    setSyncState("idle");
+  };
+
+  return (
+    <section className="kb-quiz">
+      <div className="kb-quiz-heading">
+        <div><span>CONCEPT CHECK</span><h2>三道题，检查是否真的理解</h2></div>
+        <small>{answeredCount} / {questions.length} 已作答</small>
+      </div>
+      <div className="kb-quiz-questions">
+        {questions.map((question, questionIndex) => {
+          const selected = answers[question.id];
+          const isCorrect = submitted && selected === question.answer;
+          return (
+            <div className="kb-quiz-question" key={question.id}>
+              <strong><span>{String(questionIndex + 1).padStart(2, "0")}</span>{question.prompt}</strong>
+              <div className="kb-quiz-options">
+                {question.options.map((option, optionIndex) => {
+                  const chosen = selected === optionIndex;
+                  const correctOption = submitted && question.answer === optionIndex;
+                  const wrongOption = submitted && chosen && !correctOption;
+                  return (
+                    <button
+                      aria-pressed={chosen}
+                      className={`${chosen ? "is-selected" : ""} ${correctOption ? "is-correct" : ""} ${wrongOption ? "is-wrong" : ""}`}
+                      disabled={submitted}
+                      key={option}
+                      onClick={() => setAnswers((current) => ({ ...current, [question.id]: optionIndex }))}
+                      type="button"
+                    >
+                      <span>{String.fromCharCode(65 + optionIndex)}</span>{option}
+                    </button>
+                  );
+                })}
+              </div>
+              {submitted ? (
+                <p className={isCorrect ? "is-correct" : "is-wrong"}>
+                  <strong>{isCorrect ? "回答正确" : "需要再想一步"}</strong>{question.explanation}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="kb-quiz-actions">
+        {submitted ? (
+          <>
+            <div className="kb-quiz-result">
+              <strong>{Math.round(score * 100)}%</strong>
+              <span>{score >= 2 / 3 ? "已建立基本理解，可以继续前进。" : "建议回看本节重点后再试一次。"}</span>
+            </div>
+            <button onClick={retryQuiz} type="button">再测一次</button>
+          </>
+        ) : (
+          <>
+            <span>{isAuthenticated ? "结果将计入你的概念掌握度" : "登录后可把结果计入学习画像"}</span>
+            <button disabled={answeredCount !== questions.length} onClick={submitQuiz} type="button">提交答案</button>
+          </>
+        )}
+      </div>
+      {syncState === "syncing" ? <p className="kb-quiz-sync">正在同步学习结果…</p> : null}
+      {syncState === "synced" ? <p className="kb-quiz-sync is-synced">小测结果已计入学习画像。</p> : null}
+      {syncState === "failed" ? <p className="kb-quiz-sync is-failed">本次结果暂未同步，你仍可以继续学习。</p> : null}
+    </section>
+  );
+}
+
+function ArticleReader({ article, authHeaders, bookmarked, completed, isAuthenticated, onBookmark, onComplete, onMasteryRecorded }) {
   const nextArticle = getNextArticle(article.id);
   const sectionIds = article.sections.map((section, index) => `section-${index + 1}`);
 
@@ -491,6 +615,14 @@ function ArticleReader({ article, bookmarked, completed, onBookmark, onComplete 
             <div><Icon name="spark" size={19} /> 本节带走一句话</div>
             <p>{article.takeaway}</p>
           </section>
+
+          <ArticleQuiz
+            article={article}
+            authHeaders={authHeaders}
+            isAuthenticated={isAuthenticated}
+            key={article.id}
+            onMasteryRecorded={onMasteryRecorded}
+          />
 
           {article.gameLink ? (
             <section className="kb-game-bridge">
@@ -609,10 +741,13 @@ export default function KnowledgeBase({ articleId = "" }) {
         {article ? (
           <ArticleReader
             article={article}
+            authHeaders={authHeaders}
             bookmarked={bookmarks.includes(article.id)}
             completed={completed.includes(article.id)}
+            isAuthenticated={isAuthenticated}
             onBookmark={() => toggleStoredItem(setBookmarks, STORAGE_KEYS.bookmarks, article.id)}
             onComplete={toggleArticleCompletion}
+            onMasteryRecorded={() => setMasteryRefresh((value) => value + 1)}
           />
         ) : (
           <KnowledgeHome

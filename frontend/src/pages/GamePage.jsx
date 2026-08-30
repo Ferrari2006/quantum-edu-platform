@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../auth.jsx";
 import Balatro from "../components/Balatro.jsx";
 import MagicBento, { MagicBentoCard } from "../components/MagicBento.jsx";
+import { buildGameLearningEvent } from "../utils/learningEvidence.js";
 import "./GamePage.css";
 
 const API_BASE = "/api/quantum-game";
@@ -512,12 +514,15 @@ function QuantumBalatroBackdrop() {
 }
 
 export default function GamePage() {
+  const { authHeaders, isAuthenticated } = useAuth();
   const [gamesList, setGamesList] = useState([]);
   const [gameState, setGameState] = useState(null);
   const [error, setError] = useState("");
   const [codexOpen, setCodexOpen] = useState(false);
   const [conceptIds, setConceptIds] = useState(loadConceptIds);
   const [newConceptCount, setNewConceptCount] = useState(0);
+  const [learningSync, setLearningSync] = useState("");
+  const reportedMilestones = useRef(new Set());
 
   const refreshState = () =>
     api("/state")
@@ -540,6 +545,32 @@ export default function GamePage() {
     const timeoutId = window.setTimeout(() => setNewConceptCount(0), 2200);
     return () => window.clearTimeout(timeoutId);
   }, [gameState, conceptIds]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const learningEvent = buildGameLearningEvent(gameState);
+    if (!learningEvent) return;
+    const { milestoneKey, payload } = learningEvent;
+    if (reportedMilestones.current.has(milestoneKey)) return;
+    reportedMilestones.current.add(milestoneKey);
+
+    setLearningSync("syncing");
+    fetch("/api/learning/events", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("游戏学习记录同步失败");
+        setLearningSync("synced");
+        window.setTimeout(() => setLearningSync(""), 2400);
+      })
+      .catch(() => {
+        reportedMilestones.current.delete(milestoneKey);
+        setLearningSync("failed");
+        window.setTimeout(() => setLearningSync(""), 3200);
+      });
+  }, [authHeaders, gameState, isAuthenticated]);
 
   const startGame = async (gameId) => {
     setError("");
@@ -571,6 +602,11 @@ export default function GamePage() {
         </button>
       )}
       {newConceptCount > 0 && <div className="codex-toast">解锁 {newConceptCount} 条新概念</div>}
+      {learningSync ? (
+        <div className={`game-learning-toast is-${learningSync}`}>
+          {learningSync === "syncing" ? "正在同步游戏学习记录…" : learningSync === "synced" ? "游戏表现已计入学习画像" : "学习记录暂未同步"}
+        </div>
+      ) : null}
       {codexOpen && (
         <ConceptCodexModal
           unlockedIds={conceptIds}
