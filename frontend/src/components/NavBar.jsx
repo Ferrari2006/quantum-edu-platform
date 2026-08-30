@@ -28,6 +28,9 @@ export default function NavBar() {
         <NavLink className="navlink" to="/game">
           {t.nav.game}
         </NavLink>
+        <NavLink className="navlink" to="/lab">
+          {t.nav.lab}
+        </NavLink>
         <NavLink className="navlink" to="/account">
           {user ? user.username : t.nav.account}
         </NavLink>

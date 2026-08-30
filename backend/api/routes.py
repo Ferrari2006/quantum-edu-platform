@@ -15,6 +15,11 @@ from backend.rag.reranker import rerank
 from backend.rag.retriever import retrieve
 from backend.rag.router import route_query
 from backend.rag.schema import QueryRoute
+from backend.quantum.service import (
+    QuantumCircuitValidationError,
+    calculate_fidelity,
+    execute_circuit,
+)
 
 router = APIRouter()
 
@@ -48,20 +53,22 @@ class QueryRequest(BaseModel):
         return context
 
 class QuantumGateOp(BaseModel):
-    gate: str
+    gate: str = Field(min_length=1, max_length=16)
     targets: list[int] = Field(default_factory=list)
     theta: float | None = None
 
 
 class QuantumRunRequest(BaseModel):
-    num_qubits: int = 2
-    ops: list[QuantumGateOp] = Field(default_factory=list)
+    num_qubits: int = Field(default=2, ge=1, le=5)
+    ops: list[QuantumGateOp] = Field(default_factory=list, max_length=40)
 
 
 class FidelityRequest(BaseModel):
-    num_qubits: int = 2
-    ops: list[QuantumGateOp] = Field(default_factory=list)
-    target_statevector: list[float] = Field(default_factory=list)
+    num_qubits: int = Field(default=2, ge=1, le=5)
+    ops: list[QuantumGateOp] = Field(default_factory=list, max_length=40)
+    target_statevector: list[Any] = Field(default_factory=list)
+    target_basis_state: str | None = Field(default=None, max_length=5)
+    target_probabilities: dict[str, float] = Field(default_factory=dict)
 
 class GameInfo(BaseModel):
     id: str
@@ -165,12 +172,24 @@ def rag_history_delete(
 
 @router.post("/quantum/run")
 def quantum_run(payload: QuantumRunRequest):
-    raise HTTPException(status_code=501, detail="not implemented")
+    try:
+        return execute_circuit(payload.num_qubits, payload.ops)
+    except QuantumCircuitValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/quantum/fidelity")
 def quantum_fidelity(payload: FidelityRequest):
-    raise HTTPException(status_code=501, detail="not implemented")
+    try:
+        return calculate_fidelity(
+            payload.num_qubits,
+            payload.ops,
+            target_statevector=payload.target_statevector,
+            target_basis_state=payload.target_basis_state,
+            target_probabilities=payload.target_probabilities,
+        )
+    except QuantumCircuitValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/games", response_model=list[GameInfo])

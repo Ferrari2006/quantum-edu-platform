@@ -24,6 +24,7 @@
 - **智能问答系统**：已实现“检索—校验—生成—审查”的多智能体 RAG 流水线，支持来源重排、引用检查、一次自动修正、会话历史与流程追踪。
 - **游戏整合**：已接入两套量子计算教育游戏 Demo，并通过 `/api/quantum-game` 接口统一管理状态。
 - **量子反馈**：Game 1 展示目标概率匹配，Game 2 使用 Qiskit backend 计算真实量子态 fidelity 并参与计分。
+- **量子线路实验室**：支持图形化搭建1–5量子比特线路、态矢量模拟、概率与保真度反馈、Qiskit代码生成和AI解释。
 - **游戏化学习**：提供规则页、分数拆解、商店、Joker、开包动画、roulette 风险等交互机制。
 - **知识扩展**：围绕 docs、RAG、问答页和学习解释层继续沉淀量子知识内容。
 - **账号与学习记忆**：支持注册、登录和学习偏好管理；登录后的 AI 问答会在相关时结合个人记忆。
@@ -63,6 +64,8 @@ quantum-edu-platform/
       agents.py             # 检索、校验、生成、审查智能体
       chain.py              # 多智能体问答编排入口
       domain_tools.py       # Qiskit 安全静态诊断
+    quantum/
+      service.py            # 通用量子线路运行与保真度服务
     requirements.txt
 
   frontend/
@@ -76,6 +79,7 @@ quantum-edu-platform/
         Home.jsx            # 首页
         KnowledgeBase.jsx   # 学习者知识库首页与文章阅读页
         OAPage.jsx          # 问答页面
+        QuantumLab.jsx      # 图形化量子线路实验室
         AccountPage.jsx     # 账号与学习记忆
         GamePage.jsx        # 游戏页面与交互逻辑
         GamePage.css        # 游戏页面样式
@@ -106,6 +110,7 @@ quantum-edu-platform/
 - `api/auth_routes.py`：账号注册、登录、当前用户和学习记忆接口。
 - `db.py`：本地 SQLite 数据层，保存用户、会话、学习记忆与问答历史；数据库文件不会进入版本库。
 - `api/game_routes.py`：Web 游戏桥接层，负责游戏列表、启动、状态序列化、Game 1 电路操作、Game 2 卡牌操作等。
+- `quantum/service.py`：受限的通用线路执行服务，返回概率、态矢量、Bloch向量、线路指标和保真度，不执行任意用户代码。
 - `rag/`：面向量子计算的混合检索、多智能体问答、引用校验与领域工具实现。
 - `requirements.txt`：后端依赖声明文件，包含 FastAPI、Uvicorn、Qiskit、Qiskit Aer。
 
@@ -115,6 +120,7 @@ quantum-edu-platform/
 - `pages/KnowledgeBase.jsx`：面向学习者的知识库前台，包含六阶段学习目录、站内搜索、文章阅读、收藏、完成进度和游戏/问答入口。
 - `data/knowledgeContent.js`：知识库的前端内容模型。当前提供 21 个主题框架和 5 篇结构示例，后续可替换为后端 Markdown 内容接口。
 - `pages/OAPage.jsx`：多智能体问答页面，支持任务模式选择、Qiskit 代码输入、当前游戏状态自动附带和处理流程展示。
+- `pages/QuantumLab.jsx`：图形化线路实验室，提供量子门工具箱、线路画布、预设实验、结果图表和AI解释入口。
 - `pages/AccountPage.jsx`：账号与个人学习记忆管理页面。
 - `auth.jsx`：保存登录状态，并为问答和记忆请求附加身份令牌。
 - `i18n.jsx`：首页、导航、问答与账号页的中英文文案。
@@ -265,6 +271,8 @@ POST /api/rag/query
 POST /api/rag/ask
 GET  /api/rag/history/{session_id}
 DELETE /api/rag/history/{session_id}
+POST /api/quantum/run
+POST /api/quantum/fidelity
 ```
 
 ### 游戏桥接接口
@@ -302,7 +310,8 @@ npm.cmd run build
 - [ ] 建立离线评测集：检索命中率、引用正确率、事实性和任务完成度。
 - [ ] 完善智能问答体验：问题改写、流式输出、公式渲染和多轮对话摘要。
 - [ ] 将学习内容、问答、练习和游戏表现汇总为概念掌握度与教学推荐闭环。
-- [ ] 实现通用量子运行接口，并在此基础上建设图形化量子线路实验室。
+- [x] 实现通用量子运行/保真度接口和图形化量子线路实验室MVP。
+- [ ] 为线路实验室增加实验任务、三维Bloch球、测量/经典寄存器与噪声模型。
 - [ ] 建立量子知识内容体系：基础概念、量子门、电路、纠缠、测量、算法入门等。
 - [ ] 打通“知识问答 ↔ 游戏反馈”的闭环，让游戏中的操作和卡关点能够触发学习解释。
 - [ ] 将量子后端能力抽象为可复用模块或服务：电路执行、fidelity、噪声模型。
