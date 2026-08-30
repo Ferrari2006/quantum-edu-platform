@@ -3045,3 +3045,21 @@ body:has(.quantum-game) .navlink.active {
     min-height: 520px;
   }
 }
+.game-learning-toast {
+  position: fixed;
+  z-index: 90;
+  top: 118px;
+  right: 22px;
+  padding: 10px 14px;
+  border: 1px solid rgba(139, 231, 175, .28);
+  border-radius: 10px;
+  background: rgba(10, 28, 19, .94);
+  color: #b9e9c8;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, .28);
+  font-size: 11px;
+}
+
+.game-learning-toast.is-failed {
+  border-color: rgba(233, 144, 122, .35);
+  color: #efb2a4;
+}

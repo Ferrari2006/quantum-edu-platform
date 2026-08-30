@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import random
+import secrets
 import sys
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -223,6 +224,7 @@ class CardPlayRequest(BaseModel):
 class CircuitGameSession:
     def __init__(self) -> None:
         self.game_id = "game1"
+        self.run_id = secrets.token_urlsafe(10)
         self.level_idx = 0
         self.hands_left = 4
         self.max_discards = 3
@@ -304,6 +306,7 @@ class CircuitGameSession:
             "active": True,
             "kind": "circuit",
             "game_id": self.game_id,
+            "run_id": self.run_id,
             "phase": self.phase,
             "level_index": self.level_idx,
             "level_count": len(LEVELS),
@@ -872,10 +875,17 @@ def start_game(game_id: str) -> dict[str, str]:
     elif game_id == "game2":
         backend = QuantumBackend(num_qubits=3)
         game = GameState(backend=backend)
-        games_instances["active"] = {"id": "game2", "kind": "cards", "instance": game}
+        games_instances["active"] = {
+            "id": "game2",
+            "kind": "cards",
+            "instance": game,
+            "run_id": secrets.token_urlsafe(10),
+        }
     else:
         raise HTTPException(status_code=400, detail="Unknown game id")
-    return {"status": "success", "game_id": game_id}
+    active = games_instances["active"]
+    run_id = active.run_id if isinstance(active, CircuitGameSession) else active["run_id"]
+    return {"status": "success", "game_id": game_id, "run_id": run_id}
 
 
 @router.get("/state")
@@ -898,6 +908,7 @@ def get_game_state() -> dict[str, Any]:
         "kind": "cards",
         "show_tutorial": not getattr(game, "seen_tutorial", False) and game.phase == 'PLAYING',
         "game_id": active["id"],
+        "run_id": active["run_id"],
         "phase": game.phase,
         "chips": game.chips,
         "ante": game.ante,
