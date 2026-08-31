@@ -88,6 +88,14 @@ LAB_TASK_BY_CONCEPT = {
     "first-bell-circuit": "bell-pair",
 }
 
+GUIDED_LAB_TASKS = [
+    {"id": "hadamard-superposition", "concept_id": "superposition"},
+    {"id": "bit-flip", "concept_id": "single-qubit-gates"},
+    {"id": "phase-interference", "concept_id": "phase-and-interference"},
+    {"id": "bell-pair", "concept_id": "bell-state"},
+    {"id": "ghz-chain", "concept_id": "multi-qubit-and-cnot"},
+]
+
 GAME_CONCEPTS = {
     "quantum-hacker-guide",
     "roulette-and-measurement",

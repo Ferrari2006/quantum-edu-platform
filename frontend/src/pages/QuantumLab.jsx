@@ -143,10 +143,16 @@ export default function QuantumLab() {
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [taskEvaluation, setTaskEvaluation] = useState(null);
   const [showTaskHint, setShowTaskHint] = useState(false);
+  const [labProgress, setLabProgress] = useState({ summary: null, items: [] });
 
   const qiskitCode = result?.qiskit_code || localQiskitCode(numQubits, operations);
   const activeTask = activeTaskId ? quantumLabTaskById[activeTaskId] : null;
   const activeTaskCopy = getLabTaskCopy(activeTask, language);
+  const labProgressByTaskId = useMemo(
+    () => Object.fromEntries(labProgress.items.map((item) => [item.id, item])),
+    [labProgress.items],
+  );
+  const activeTaskProgress = activeTask ? labProgressByTaskId[activeTask.id] : null;
   const targetOptions = useMemo(
     () => [
       { value: "none", label: t.lab.targets.none },
@@ -180,12 +186,31 @@ export default function QuantumLab() {
     if (updateLocation) navigateTo(`/lab?task=${task.id}`, { replace: true });
   }
 
+  async function loadLabProgress() {
+    if (!isAuthenticated) {
+      setLabProgress({ summary: null, items: [] });
+      return;
+    }
+    try {
+      const progress = await fetch("/api/learning/lab-progress", {
+        headers: authHeaders(),
+      }).then(readJson);
+      setLabProgress(progress);
+    } catch {
+      // Mission execution remains available when learning history cannot be loaded.
+    }
+  }
+
   useEffect(() => {
     const requestedTask = guidedTaskIdFromHash();
     if (requestedTask && quantumLabTaskById[requestedTask]) {
       loadGuidedTask(requestedTask, false);
     }
   }, []);
+
+  useEffect(() => {
+    loadLabProgress();
+  }, [isAuthenticated]);
 
   function chooseGate(item) {
     setSelectedGate(item);
@@ -303,7 +328,10 @@ export default function QuantumLab() {
             return response.json();
           })),
         )
-          .then(() => setLearningSync("synced"))
+          .then(() => {
+            setLearningSync("synced");
+            loadLabProgress();
+          })
           .catch(() => setLearningSync("failed"));
       }
     } catch (runError) {
@@ -348,23 +376,41 @@ export default function QuantumLab() {
             <h2>{t.lab.guided.title}</h2>
             <p>{t.lab.guided.subtitle}</p>
           </div>
-          {activeTask ? (
-            <HashLink to={`/knowledge/${activeTask.conceptId}`}>{t.lab.guided.readConcept}</HashLink>
-          ) : null}
+          <div className="ql-guided-actions">
+            {isAuthenticated && labProgress.summary ? (
+              <span>
+                {t.lab.guided.completionSummary
+                  .replace("{completed}", String(labProgress.summary.completed_tasks))
+                  .replace("{total}", String(labProgress.summary.total_tasks))}
+              </span>
+            ) : (
+              <HashLink to="/account">{t.lab.guided.signInProgress}</HashLink>
+            )}
+            {activeTask ? (
+              <HashLink to={`/knowledge/${activeTask.conceptId}`}>{t.lab.guided.readConcept}</HashLink>
+            ) : null}
+          </div>
         </div>
         <div className="ql-task-tabs">
           {quantumLabTasks.map((task) => {
             const taskCopy = getLabTaskCopy(task, language);
+            const savedProgress = labProgressByTaskId[task.id];
             return (
               <button
-                className={activeTaskId === task.id ? "active" : ""}
+                className={`${activeTaskId === task.id ? "active" : ""}${savedProgress?.completed ? " completed" : ""}`.trim()}
                 key={task.id}
                 onClick={() => loadGuidedTask(task.id)}
                 type="button"
               >
                 <small>{task.difficulty}</small>
                 <strong>{taskCopy.title}</strong>
-                <span>{task.minutes} {t.lab.guided.minutes}</span>
+                <span>
+                  {savedProgress?.completed
+                    ? `✓ ${t.lab.guided.completed}`
+                    : savedProgress?.attempts
+                      ? t.lab.guided.attempts.replace("{count}", String(savedProgress.attempts))
+                      : `${task.minutes} ${t.lab.guided.minutes}`}
+                </span>
               </button>
             );
           })}
@@ -375,6 +421,17 @@ export default function QuantumLab() {
               <span>{t.lab.guided.goal}</span>
               <h3>{activeTaskCopy.title}</h3>
               <p>{activeTaskCopy.goal}</p>
+              {activeTaskProgress?.attempts ? (
+                <div className="ql-task-history">
+                  <span>{t.lab.guided.attempts.replace("{count}", String(activeTaskProgress.attempts))}</span>
+                  <span>
+                    {t.lab.guided.bestFidelity.replace(
+                      "{score}",
+                      String(Math.round(activeTaskProgress.best_fidelity * 100)),
+                    )}
+                  </span>
+                </div>
+              ) : null}
               <div>
                 <button onClick={() => loadGuidedTask(activeTask.id, false)} type="button">
                   {t.lab.guided.reset}

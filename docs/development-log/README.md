@@ -15,6 +15,7 @@
 | 07 | [概念小测与游戏学习证据](07-assessments-and-game-evidence.md) | 已完成MVP |
 | 08 | [学习档案与前置概念推荐](08-learning-dashboard-and-prerequisites.md) | 已完成MVP |
 | 09 | [引导式线路实验与自动验收](09-guided-circuit-labs.md) | 已完成MVP |
+| 10 | [实验任务进度与最佳成绩](10-lab-mission-progress.md) | 已完成MVP |
 
 ## 长期上下文
 

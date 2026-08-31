@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from backend.api.auth_routes import get_current_user
 from backend.learning.service import (
     build_learning_profile,
+    get_guided_lab_progress,
     get_learning_timeline,
     get_recommendations,
     submit_learning_event,
@@ -63,6 +64,11 @@ def learning_events(
 @router.get("/mastery")
 def mastery(user: Annotated[dict, Depends(get_current_user)]):
     return build_learning_profile(user["id"])
+
+
+@router.get("/lab-progress")
+def lab_progress(user: Annotated[dict, Depends(get_current_user)]):
+    return get_guided_lab_progress(user["id"])
 
 
 @router.get("/recommendations")

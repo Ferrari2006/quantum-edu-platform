@@ -5,6 +5,7 @@ from pathlib import Path
 import backend.db as db
 from backend.learning.service import (
     build_learning_profile,
+    get_guided_lab_progress,
     get_learning_timeline,
     get_recommendations,
     submit_learning_event,
@@ -128,6 +129,35 @@ class LearningServiceTests(unittest.TestCase):
         self.assertTrue(event["created"])
         self.assertEqual(event["event_type"], "lab_attempt")
         self.assertAlmostEqual(event["mastery"]["mastery_score"], 0.45)
+
+    def test_guided_lab_progress_tracks_attempts_completion_and_best_result(self):
+        submit_learning_event(
+            self.user["id"],
+            "bell-state",
+            "lab_attempt",
+            "guided_quantum_lab",
+            0.42,
+            metadata={"task_id": "bell-pair", "task_passed": False, "fidelity": 0.5},
+        )
+        submit_learning_event(
+            self.user["id"],
+            "bell-state",
+            "lab_completed",
+            "guided_quantum_lab",
+            0.99,
+            metadata={"task_id": "bell-pair", "task_passed": True, "fidelity": 0.99},
+        )
+
+        progress = get_guided_lab_progress(self.user["id"])
+        bell = next(item for item in progress["items"] if item["id"] == "bell-pair")
+
+        self.assertEqual(progress["summary"]["total_tasks"], 5)
+        self.assertEqual(progress["summary"]["completed_tasks"], 1)
+        self.assertEqual(progress["summary"]["total_attempts"], 2)
+        self.assertEqual(bell["attempts"], 2)
+        self.assertTrue(bell["completed"])
+        self.assertAlmostEqual(bell["best_score"], 0.99)
+        self.assertAlmostEqual(bell["best_fidelity"], 0.99)
 
     def test_prerequisites_unlock_next_concept(self):
         submit_learning_event(

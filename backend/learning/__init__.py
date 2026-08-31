@@ -2,8 +2,16 @@
 
 from backend.learning.service import (
     build_learning_profile,
+    get_guided_lab_progress,
+    get_learning_timeline,
     get_recommendations,
     submit_learning_event,
 )
 
-__all__ = ["build_learning_profile", "get_recommendations", "submit_learning_event"]
+__all__ = [
+    "build_learning_profile",
+    "get_guided_lab_progress",
+    "get_learning_timeline",
+    "get_recommendations",
+    "submit_learning_event",
+]
