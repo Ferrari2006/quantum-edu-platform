@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { knowledgeQuizzes } from "../src/data/knowledgeQuizzes.js";
 import {
+  evaluateLabTask,
+  quantumLabTaskById,
+  quantumLabTasks,
+} from "../src/data/quantumLabTasks.js";
+import {
   buildGameLearningEvent,
   calculateQuizResult,
 } from "../src/utils/learningEvidence.js";
@@ -95,4 +100,35 @@ test("failed game keeps diagnostic performance but reduces mastery evidence", ()
   assert.equal(event.payload.metadata.performance, 0.8);
   assert.equal(event.payload.metadata.success, false);
   assert.equal(event.payload.score, 0.4);
+});
+
+test("guided lab catalog exposes reviewed bilingual missions", () => {
+  assert.equal(quantumLabTasks.length, 5);
+  assert.equal(new Set(quantumLabTasks.map((task) => task.id)).size, 5);
+  quantumLabTasks.forEach((task) => {
+    assert.ok(task.copy.zh.title.length > 0);
+    assert.ok(task.copy.en.title.length > 0);
+    assert.ok(task.copy.zh.steps.length >= 3);
+    assert.ok(task.minFidelity >= 0.98);
+  });
+});
+
+test("Bell mission passes only after its controlled gate and fidelity target", () => {
+  const task = quantumLabTaskById["bell-pair"];
+  const incomplete = evaluateLabTask(task, {
+    numQubits: 2,
+    operations: task.starterOps,
+    fidelity: 0.5,
+  });
+  const completed = evaluateLabTask(task, {
+    numQubits: 2,
+    operations: [...task.starterOps, { gate: "CX", targets: [0, 1] }],
+    fidelity: { fidelity: 1 },
+  });
+
+  assert.equal(incomplete.passed, false);
+  assert.ok(incomplete.score < 0.7);
+  assert.equal(completed.passed, true);
+  assert.equal(completed.score, 1);
+  assert.ok(completed.checks.every((check) => check.passed));
 });

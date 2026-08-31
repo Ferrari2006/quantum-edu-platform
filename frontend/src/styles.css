@@ -864,6 +864,7 @@ body {
 }
 
 .ql-hero,
+.ql-guided,
 .ql-toolbar,
 .ql-palette,
 .ql-workspace,
@@ -913,6 +914,7 @@ body {
 }
 
 .ql-hero p,
+.ql-guided p,
 .ql-palette p,
 .ql-workspace-head p,
 .ql-empty-result {
@@ -946,6 +948,246 @@ body {
 .ql-card-head button:hover {
   border-color: #8fb946;
   color: #c9f85d;
+}
+
+.ql-guided {
+  padding: 22px;
+}
+
+.ql-guided-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ql-guided-heading > div > span,
+.ql-task-goal > span,
+.ql-task-steps > span,
+.ql-task-evaluation > span {
+  color: #8fa197;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.ql-guided-heading h2 {
+  margin: 5px 0 6px;
+  color: #eff6f1;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.ql-guided-heading p {
+  max-width: 760px;
+  font-size: 12px;
+}
+
+.ql-guided-heading > a {
+  flex: 0 0 auto;
+  border: 1px solid #3f564a;
+  color: #b8cfbf;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.ql-guided-heading > a:hover {
+  border-color: #c9f85d;
+  color: #c9f85d;
+}
+
+.ql-task-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.ql-task-tabs button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 78px;
+  border: 1px solid #2d4036;
+  background: rgba(7, 18, 14, .72);
+  color: #cbd9d0;
+  border-radius: 12px;
+  padding: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ql-task-tabs button:hover,
+.ql-task-tabs button.active {
+  border-color: #82a94a;
+  background: rgba(31, 55, 37, .72);
+}
+
+.ql-task-tabs button.active {
+  box-shadow: 0 0 0 2px rgba(201, 248, 93, .08);
+}
+
+.ql-task-tabs small {
+  grid-row: 1 / 3;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #43584c;
+  color: #c9f85d;
+  border-radius: 50%;
+  place-items: center;
+  font-size: 8px;
+}
+
+.ql-task-tabs strong {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ql-task-tabs span {
+  color: #75887d;
+  font-size: 8px;
+}
+
+.ql-task-brief {
+  display: grid;
+  grid-template-columns: 1.15fr .95fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ql-task-goal,
+.ql-task-steps,
+.ql-task-evaluation {
+  border: 1px solid #293c32;
+  background: rgba(10, 23, 18, .72);
+  border-radius: 13px;
+  padding: 14px;
+}
+
+.ql-task-goal h3 {
+  margin: 6px 0 5px;
+  color: #eff7f1;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.ql-task-goal p,
+.ql-task-evaluation p {
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.ql-task-goal > div {
+  display: flex;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.ql-task-goal button {
+  border: 1px solid #3c5246;
+  background: #10231a;
+  color: #b8cbbf;
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+}
+
+.ql-task-goal button:hover {
+  border-color: #c9f85d;
+  color: #c9f85d;
+}
+
+.ql-task-goal aside {
+  margin-top: 9px;
+  border-left: 2px solid #d3ae4f;
+  background: rgba(78, 58, 19, .24);
+  color: #dccb9d;
+  padding: 8px 10px;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.ql-task-steps ol {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 21px;
+}
+
+.ql-task-steps li {
+  color: #aebfb5;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.ql-task-steps li::marker {
+  color: #c9f85d;
+  font-weight: 800;
+}
+
+.ql-task-evaluation {
+  border-color: #34483d;
+}
+
+.ql-task-evaluation.pending {
+  border-color: #6e5630;
+}
+
+.ql-task-evaluation.passed {
+  border-color: #4c7d5c;
+  background: rgba(28, 64, 39, .35);
+}
+
+.ql-task-evaluation > strong {
+  display: block;
+  margin-top: 7px;
+  color: #e7efe9;
+  font-size: 12px;
+}
+
+.ql-task-evaluation.passed > strong {
+  color: #b9efc4;
+}
+
+.ql-task-evaluation > div {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.ql-task-evaluation small {
+  color: #718279;
+  font-size: 9px;
+}
+
+.ql-task-evaluation small.passed {
+  color: #9bd6a9;
+}
+
+.ql-task-evaluation p {
+  margin-top: 10px;
+  color: #a9beaf;
+}
+
+.ql-task-evaluation p b {
+  color: #c9f85d;
+}
+
+.ql-task-empty {
+  margin-top: 14px;
+  border: 1px dashed #33483c;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 11px;
 }
 
 .ql-toolbar {
@@ -1395,6 +1637,7 @@ body {
   }
 
   .ql-hero,
+  .ql-guided-heading,
   .ql-toolbar,
   .ql-workspace-head,
   .ql-card-head {
@@ -1404,6 +1647,15 @@ body {
 
   .ql-hero {
     padding: 22px;
+  }
+
+  .ql-guided {
+    padding: 16px;
+  }
+
+  .ql-task-tabs,
+  .ql-task-brief {
+    grid-template-columns: 1fr;
   }
 
   .ql-toolbar-actions {
@@ -1431,6 +1683,18 @@ body {
 
   .ql-layout {
     grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .ql-task-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ql-task-brief {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ql-task-evaluation {
+    grid-column: 1 / -1;
   }
 
   .ql-toolbar {

@@ -76,6 +76,18 @@ LAB_CONCEPTS = {
     "noise-and-fidelity",
 }
 
+# Concepts with a guided circuit task should open a concrete experiment instead of
+# dropping the learner onto an empty canvas. Other lab-capable concepts still use
+# the generic lab route until a reviewed task is available.
+LAB_TASK_BY_CONCEPT = {
+    "superposition": "hadamard-superposition",
+    "phase-and-interference": "phase-interference",
+    "single-qubit-gates": "bit-flip",
+    "multi-qubit-and-cnot": "ghz-chain",
+    "bell-state": "bell-pair",
+    "first-bell-circuit": "bell-pair",
+}
+
 GAME_CONCEPTS = {
     "quantum-hacker-guide",
     "roulette-and-measurement",

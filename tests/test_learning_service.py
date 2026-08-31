@@ -109,8 +109,25 @@ class LearningServiceTests(unittest.TestCase):
 
         self.assertEqual(result["items"][0]["concept_id"], "superposition")
         self.assertIn("40%", result["items"][0]["reason"])
-        self.assertEqual(result["items"][0]["actions"][1]["path"], "/lab")
+        self.assertEqual(
+            result["items"][0]["actions"][1]["path"],
+            "/lab?task=hadamard-superposition",
+        )
         self.assertEqual(len(result["items"]), 3)
+
+    def test_guided_lab_attempt_is_valid_learning_evidence(self):
+        event = submit_learning_event(
+            self.user["id"],
+            "bell-state",
+            "lab_attempt",
+            "guided_quantum_lab",
+            0.45,
+            metadata={"task_id": "bell-pair", "passed": False},
+        )
+
+        self.assertTrue(event["created"])
+        self.assertEqual(event["event_type"], "lab_attempt")
+        self.assertAlmostEqual(event["mastery"]["mastery_score"], 0.45)
 
     def test_prerequisites_unlock_next_concept(self):
         submit_learning_event(

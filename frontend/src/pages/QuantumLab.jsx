@@ -1,8 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth.jsx";
+import {
+  evaluateLabTask,
+  getLabTaskCopy,
+  quantumLabTaskById,
+  quantumLabTasks,
+} from "../data/quantumLabTasks.js";
 import { useLanguage } from "../i18n.jsx";
-import { navigateTo } from "../router.jsx";
+import { HashLink, navigateTo } from "../router.jsx";
 
 const GATES = [
   { gate: "H", arity: 1, tone: "cyan" },
@@ -84,6 +90,18 @@ async function readJson(response) {
   return data;
 }
 
+function guidedTaskIdFromHash() {
+  const query = window.location.hash.split("?")[1] || "";
+  return new URLSearchParams(query).get("task");
+}
+
+function cloneOperations(operations) {
+  return operations.map((operation) => ({
+    ...operation,
+    targets: [...operation.targets],
+  }));
+}
+
 function OperationCell({ operation, qubit }) {
   const position = operation.targets.indexOf(qubit);
   if (position < 0) return <span className="ql-wire-line" />;
@@ -110,7 +128,7 @@ function inferLearningConcepts(operations, target) {
 
 export default function QuantumLab() {
   const { authHeaders, isAuthenticated } = useAuth();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [numQubits, setNumQubits] = useState(2);
   const [operations, setOperations] = useState([]);
   const [selectedGate, setSelectedGate] = useState(GATES[0]);
@@ -122,8 +140,13 @@ export default function QuantumLab() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [learningSync, setLearningSync] = useState("idle");
+  const [activeTaskId, setActiveTaskId] = useState(null);
+  const [taskEvaluation, setTaskEvaluation] = useState(null);
+  const [showTaskHint, setShowTaskHint] = useState(false);
 
   const qiskitCode = result?.qiskit_code || localQiskitCode(numQubits, operations);
+  const activeTask = activeTaskId ? quantumLabTaskById[activeTaskId] : null;
+  const activeTaskCopy = getLabTaskCopy(activeTask, language);
   const targetOptions = useMemo(
     () => [
       { value: "none", label: t.lab.targets.none },
@@ -141,7 +164,28 @@ export default function QuantumLab() {
     setFidelity(null);
     setError("");
     setLearningSync("idle");
+    setTaskEvaluation(null);
   }
+
+  function loadGuidedTask(taskId, updateLocation = true) {
+    const task = quantumLabTaskById[taskId];
+    if (!task) return;
+    setActiveTaskId(task.id);
+    setNumQubits(task.numQubits);
+    setOperations(cloneOperations(task.starterOps));
+    setTarget(task.target);
+    setPendingTargets([]);
+    setShowTaskHint(false);
+    resetOutput();
+    if (updateLocation) navigateTo(`/lab?task=${task.id}`, { replace: true });
+  }
+
+  useEffect(() => {
+    const requestedTask = guidedTaskIdFromHash();
+    if (requestedTask && quantumLabTaskById[requestedTask]) {
+      loadGuidedTask(requestedTask, false);
+    }
+  }, []);
 
   function chooseGate(item) {
     setSelectedGate(item);
@@ -181,11 +225,14 @@ export default function QuantumLab() {
 
   function loadPreset(name) {
     const preset = PRESETS[name];
+    setActiveTaskId(null);
+    setShowTaskHint(false);
     setNumQubits(preset.numQubits);
     setOperations(preset.ops);
     setTarget(preset.target);
     setPendingTargets([]);
     resetOutput();
+    navigateTo("/lab", { replace: true });
   }
 
   async function runCircuit() {
@@ -209,18 +256,35 @@ export default function QuantumLab() {
       const [runResult, fidelityResult] = await Promise.all([runPromise, fidelityPromise]);
       setResult(runResult);
       setFidelity(fidelityResult);
+      const guidedEvaluation = activeTask
+        ? evaluateLabTask(activeTask, {
+            numQubits,
+            operations,
+            fidelity: fidelityResult,
+          })
+        : null;
+      setTaskEvaluation(guidedEvaluation);
       if (isAuthenticated) {
         setLearningSync("syncing");
-        const evidenceScore = fidelityResult?.fidelity ?? Math.min(0.55 + operations.length * 0.03, 0.85);
-        const concepts = inferLearningConcepts(operations, target);
+        const evidenceScore = guidedEvaluation?.score
+          ?? fidelityResult?.fidelity
+          ?? Math.min(0.55 + operations.length * 0.03, 0.85);
+        const concepts = activeTask
+          ? [activeTask.conceptId]
+          : inferLearningConcepts(operations, target);
+        const attemptId = activeTask
+          ? globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
+          : null;
         Promise.all(
           concepts.map((conceptId) => fetch("/api/learning/events", {
             method: "POST",
             headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
               concept_id: conceptId,
-              event_type: "lab_completed",
-              source: "quantum_lab",
+              event_type: guidedEvaluation && !guidedEvaluation.passed
+                ? "lab_attempt"
+                : "lab_completed",
+              source: activeTask ? "guided_quantum_lab" : "quantum_lab",
               score: evidenceScore,
               metadata: {
                 num_qubits: numQubits,
@@ -228,7 +292,11 @@ export default function QuantumLab() {
                 gates: operations.map((operation) => operation.gate),
                 target,
                 fidelity: fidelityResult?.fidelity ?? null,
+                task_id: activeTask?.id ?? null,
+                task_passed: guidedEvaluation?.passed ?? null,
+                task_checks: guidedEvaluation?.checks ?? [],
               },
+              idempotency_key: attemptId ? `lab:${activeTask.id}:${attemptId}` : undefined,
             }),
           }).then((response) => {
             if (!response.ok) throw new Error("Learning sync failed");
@@ -249,7 +317,9 @@ export default function QuantumLab() {
     window.localStorage.setItem(
       "quantum-lab-ai-draft",
       JSON.stringify({
-        query: t.lab.aiQuestion,
+        query: activeTaskCopy
+          ? `${t.lab.aiQuestion}\n\n${t.lab.guided.aiContext}: ${activeTaskCopy.goal}\n${t.lab.guided.reflect}: ${activeTaskCopy.reflect}`
+          : t.lab.aiQuestion,
         code: qiskitCode,
       }),
     );
@@ -271,6 +341,85 @@ export default function QuantumLab() {
         </div>
       </section>
 
+      <section className="ql-guided">
+        <div className="ql-guided-heading">
+          <div>
+            <span>{t.lab.guided.eyebrow}</span>
+            <h2>{t.lab.guided.title}</h2>
+            <p>{t.lab.guided.subtitle}</p>
+          </div>
+          {activeTask ? (
+            <HashLink to={`/knowledge/${activeTask.conceptId}`}>{t.lab.guided.readConcept}</HashLink>
+          ) : null}
+        </div>
+        <div className="ql-task-tabs">
+          {quantumLabTasks.map((task) => {
+            const taskCopy = getLabTaskCopy(task, language);
+            return (
+              <button
+                className={activeTaskId === task.id ? "active" : ""}
+                key={task.id}
+                onClick={() => loadGuidedTask(task.id)}
+                type="button"
+              >
+                <small>{task.difficulty}</small>
+                <strong>{taskCopy.title}</strong>
+                <span>{task.minutes} {t.lab.guided.minutes}</span>
+              </button>
+            );
+          })}
+        </div>
+        {activeTask && activeTaskCopy ? (
+          <div className="ql-task-brief">
+            <div className="ql-task-goal">
+              <span>{t.lab.guided.goal}</span>
+              <h3>{activeTaskCopy.title}</h3>
+              <p>{activeTaskCopy.goal}</p>
+              <div>
+                <button onClick={() => loadGuidedTask(activeTask.id, false)} type="button">
+                  {t.lab.guided.reset}
+                </button>
+                <button onClick={() => setShowTaskHint((current) => !current)} type="button">
+                  {showTaskHint ? t.lab.guided.hideHint : t.lab.guided.showHint}
+                </button>
+              </div>
+              {showTaskHint ? <aside>{activeTaskCopy.hint}</aside> : null}
+            </div>
+            <div className="ql-task-steps">
+              <span>{t.lab.guided.steps}</span>
+              <ol>
+                {activeTaskCopy.steps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </div>
+            <div className={`ql-task-evaluation${taskEvaluation ? (taskEvaluation.passed ? " passed" : " pending") : ""}`}>
+              <span>{t.lab.guided.acceptance}</span>
+              <strong>
+                {taskEvaluation
+                  ? (taskEvaluation.passed ? t.lab.guided.passed : t.lab.guided.tryAgain)
+                  : t.lab.guided.notRun}
+              </strong>
+              <div>
+                {(taskEvaluation?.checks || [
+                  { id: "qubits", passed: false },
+                  { id: "gates", passed: false },
+                  { id: "gateCount", passed: false },
+                  { id: "fidelity", passed: false },
+                ]).map((check) => (
+                  <small className={check.passed ? "passed" : ""} key={check.id}>
+                    {check.passed ? "✓" : "○"} {t.lab.guided.checks[check.id]}
+                  </small>
+                ))}
+              </div>
+              {taskEvaluation?.passed ? (
+                <p><b>{t.lab.guided.reflect}：</b>{activeTaskCopy.reflect}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <p className="ql-task-empty">{t.lab.guided.choose}</p>
+        )}
+      </section>
+
       <section className="ql-toolbar">
         <label>
           <span>{t.lab.qubits}</span>
@@ -283,6 +432,7 @@ export default function QuantumLab() {
           <select value={target} onChange={(event) => {
             setTarget(event.target.value);
             setFidelity(null);
+            setTaskEvaluation(null);
           }}>
             {targetOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
