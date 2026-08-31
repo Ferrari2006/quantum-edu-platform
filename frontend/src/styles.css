@@ -985,7 +985,17 @@ body {
   font-size: 12px;
 }
 
-.ql-guided-heading > a {
+.ql-guided-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.ql-guided-actions > span,
+.ql-guided-actions a {
   flex: 0 0 auto;
   border: 1px solid #3f564a;
   color: #b8cfbf;
@@ -995,7 +1005,12 @@ body {
   text-decoration: none;
 }
 
-.ql-guided-heading > a:hover {
+.ql-guided-actions > span {
+  border-color: #536c3d;
+  color: #c9f85d;
+}
+
+.ql-guided-actions a:hover {
   border-color: #c9f85d;
   color: #c9f85d;
 }
@@ -1030,6 +1045,14 @@ body {
 
 .ql-task-tabs button.active {
   box-shadow: 0 0 0 2px rgba(201, 248, 93, .08);
+}
+
+.ql-task-tabs button.completed {
+  border-color: #477b59;
+}
+
+.ql-task-tabs button.completed span {
+  color: #9bd6a9;
 }
 
 .ql-task-tabs small {
@@ -1088,6 +1111,21 @@ body {
   display: flex;
   gap: 7px;
   margin-top: 12px;
+}
+
+.ql-task-goal .ql-task-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ql-task-history span {
+  border: 1px solid #354a3e;
+  color: #95aa9d;
+  border-radius: 99px;
+  padding: 4px 7px;
+  font-size: 8px;
 }
 
 .ql-task-goal button {

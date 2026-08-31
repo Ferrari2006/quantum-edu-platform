@@ -13,6 +13,7 @@ from backend.learning.catalog import (
     CONCEPT_CATALOG,
     CONCEPT_PREREQUISITES,
     GAME_CONCEPTS,
+    GUIDED_LAB_TASKS,
     LAB_CONCEPTS,
     LAB_TASK_BY_CONCEPT,
 )
@@ -182,6 +183,56 @@ def get_learning_timeline(user_id: str, limit: int = 50) -> dict[str, Any]:
         concept = CONCEPT_BY_ID.get(item["concept_id"])
         item["concept_title"] = concept["title"] if concept else item["concept_id"]
     return {"items": items}
+
+
+def get_guided_lab_progress(user_id: str) -> dict[str, Any]:
+    progress_by_id = {
+        task["id"]: {
+            **task,
+            "attempts": 0,
+            "completed": False,
+            "best_score": 0.0,
+            "best_fidelity": 0.0,
+            "last_attempt_at": None,
+            "completed_at": None,
+        }
+        for task in GUIDED_LAB_TASKS
+    }
+    for event in list_learning_events(user_id, 500):
+        metadata = event.get("metadata") or {}
+        task_id = metadata.get("task_id")
+        task_progress = progress_by_id.get(task_id)
+        if not task_progress or event.get("event_type") not in {"lab_attempt", "lab_completed"}:
+            continue
+        task_progress["attempts"] += 1
+        task_progress["best_score"] = max(
+            float(task_progress["best_score"]),
+            float(event.get("score") or 0.0),
+        )
+        fidelity = metadata.get("fidelity")
+        if isinstance(fidelity, (int, float)):
+            task_progress["best_fidelity"] = max(
+                float(task_progress["best_fidelity"]),
+                _clamp_score(float(fidelity)),
+            )
+        if task_progress["last_attempt_at"] is None:
+            task_progress["last_attempt_at"] = event.get("created_at")
+        passed = event.get("event_type") == "lab_completed" and metadata.get("task_passed") is not False
+        if passed:
+            task_progress["completed"] = True
+            if task_progress["completed_at"] is None:
+                task_progress["completed_at"] = event.get("created_at")
+
+    items = list(progress_by_id.values())
+    completed_tasks = sum(1 for item in items if item["completed"])
+    return {
+        "summary": {
+            "completed_tasks": completed_tasks,
+            "total_tasks": len(items),
+            "total_attempts": sum(int(item["attempts"]) for item in items),
+        },
+        "items": items,
+    }
 
 
 def _mastery_level(score: float) -> str:
