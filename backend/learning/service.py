@@ -14,11 +14,13 @@ from backend.learning.catalog import (
     CONCEPT_PREREQUISITES,
     GAME_CONCEPTS,
     LAB_CONCEPTS,
+    LAB_TASK_BY_CONCEPT,
 )
 
 
 EVENT_WEIGHTS = {
     "article_completed": 0.8,
+    "lab_attempt": 0.65,
     "lab_completed": 1.0,
     "quiz_attempt": 1.2,
     "game_result": 0.7,
@@ -206,7 +208,9 @@ def _recommendation_actions(concept_id: str) -> list[dict[str, str]]:
         }
     ]
     if concept_id in LAB_CONCEPTS:
-        actions.append({"kind": "lab", "label": "在线路实验室验证", "path": "/lab"})
+        task_id = LAB_TASK_BY_CONCEPT.get(concept_id)
+        path = f"/lab?task={task_id}" if task_id else "/lab"
+        actions.append({"kind": "lab", "label": "在线路实验室验证", "path": path})
     elif concept_id in GAME_CONCEPTS:
         actions.append({"kind": "game", "label": "进入游戏实验场", "path": "/game"})
     elif concept_id in AI_PRACTICE_CONCEPTS:

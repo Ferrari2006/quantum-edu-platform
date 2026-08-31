@@ -21,6 +21,7 @@ class LearningEventRequest(BaseModel):
     concept_id: str = Field(min_length=1, max_length=100)
     event_type: Literal[
         "article_completed",
+        "lab_attempt",
         "lab_completed",
         "quiz_attempt",
         "game_result",
