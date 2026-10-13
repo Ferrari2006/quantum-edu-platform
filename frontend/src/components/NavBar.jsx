@@ -19,14 +19,22 @@ export default function NavBar() {
         <NavLink className="navlink" to="/">
           {t.nav.home}
         </NavLink>
-        <NavLink className="navlink" to="/knowledge">
+        <NavLink className="navlink" to="/resources">
           {t.nav.knowledge}
         </NavLink>
+        <NavLink className="navlink" to="/path">学习路径</NavLink>
+        <NavLink className="navlink" to="/sources">知识来源</NavLink>
         <NavLink className="navlink" to="/oa">
           {t.nav.qa}
         </NavLink>
         <NavLink className="navlink" to="/game">
           {t.nav.game}
+        </NavLink>
+        <NavLink className="navlink" to="/lab">
+          {t.nav.lab}
+        </NavLink>
+        <NavLink className="navlink" to="/progress">
+          {t.nav.progress}
         </NavLink>
         <NavLink className="navlink" to="/account">
           {user ? user.username : t.nav.account}

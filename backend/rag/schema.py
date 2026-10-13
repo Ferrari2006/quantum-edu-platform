@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -9,6 +11,8 @@ QueryRoute = Literal[
     "paper",
     "comparison",
     "troubleshooting",
+    "game_strategy",
+    "learning_path",
 ]
 
 
@@ -53,3 +57,19 @@ class RagAnswer:
     citations: list[Citation] = field(default_factory=list)
     contexts: list[RetrievedChunk] = field(default_factory=list)
     confidence: Literal["low", "medium", "high"] = "low"
+
+
+@dataclass(frozen=True)
+class ValidationReport:
+    input_count: int
+    accepted_count: int
+    rejected_count: int
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ReviewReport:
+    status: Literal["passed", "needs_revision", "insufficient_context"]
+    issues: list[str] = field(default_factory=list)
+    citation_coverage: float = 0.0
+    attempts: int = 1

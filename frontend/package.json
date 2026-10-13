@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/build-xiaohei.mjs",
+    "predev": "node scripts/build-resource-catalog.mjs && node scripts/build-xiaohei.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/build-xiaohei.mjs",
+    "prebuild": "node scripts/build-resource-catalog.mjs && node scripts/build-xiaohei.mjs",
     "build": "vite build",
     "build:xiaohei": "node scripts/build-xiaohei.mjs",
     "sync:xiaohei": "node scripts/build-xiaohei.mjs --sync",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "gsap": "^3.15.0",

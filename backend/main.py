@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.auth_routes import router as auth_router
 from backend.api.game_routes import router as game_router
+from backend.api.learning_routes import router as learning_router
 from backend.api.routes import router as api_router
 from backend.db import init_db
 
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router, prefix="/api")
     app.include_router(api_router, prefix="/api")
+    app.include_router(learning_router, prefix="/api")
     # 将游戏相关的接口挂载到 /api/quantum-game 路径下
     app.include_router(game_router,prefix="/api/quantum-game",tags=["Quantum Game"])
 

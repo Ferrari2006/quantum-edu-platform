@@ -6,6 +6,12 @@ import Home from "./pages/Home.jsx";
 import KnowledgeBase from "./pages/KnowledgeBase.jsx";
 import OAPage from "./pages/OAPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
+import ResourceLibrary from "./pages/ResourceLibrary.jsx";
+import LearningPathPage from "./pages/LearningPathPage.jsx";
+import AssessmentPage from "./pages/AssessmentPage.jsx";
+import EvidenceLibrary from "./pages/EvidenceLibrary.jsx";
+import QuantumLab from "./pages/QuantumLab.jsx";
+import LearningProgressPage from "./pages/LearningProgressPage.jsx";
 import { HashLink as Link, useHashLocation } from "./router.jsx";
 
 function AppContent() {
@@ -18,12 +24,24 @@ function AppContent() {
     page = <Home />;
   } else if (segments[0] === "knowledge" && segments.length <= 2) {
     page = <KnowledgeBase articleId={segments[1] || ""} />;
+  } else if (path === "/resources") {
+    page = <ResourceLibrary />;
+  } else if (path === "/path") {
+    page = <LearningPathPage />;
+  } else if (path === "/assessment") {
+    page = <AssessmentPage />;
+  } else if (path === "/sources") {
+    page = <EvidenceLibrary />;
   } else if (path === "/oa") {
     page = <OAPage />;
   } else if (path === "/game") {
     page = <GamePage />;
+  } else if (path === "/lab") {
+    page = <QuantumLab />;
   } else if (path === "/account") {
     page = <AccountPage />;
+  } else if (path === "/progress") {
+    page = <LearningProgressPage />;
   } else {
     page = (
       <div>
