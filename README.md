@@ -19,8 +19,13 @@
 
 ## 功能概览
 
+游戏页现已替换为《小黑天天上夜班》网站及轻量试玩，以固定版本 Git 子模块独立构建、同站嵌入。
+启动、同步上游及自动更新 PR 的说明见 [小黑网站接入与更新](docs/xiaohei-integration.md)。
+下文中原 Game 1 / Game 2 的说明对应保留的旧版后端与原型，不再对应当前游戏页。
+前端现需 Node.js 22.12+，建议使用 Node.js 24 LTS。
+
 - **平台后端**：以 FastAPI 作为统一入口，负责承载服务编排、接口组织、RAG 问答、游戏状态桥接与后续能力扩展。
-- **平台前端**：以 React 构建平台页面，当前包含首页、学习者知识库、问答页、游戏大厅和两个 Web 游戏界面。
+- **平台前端**：以 React 构建平台页面，包含首页、学习者知识库、问答页、账号页与小黑游戏介绍及试玩页。
 - **智能问答系统**：预留 `backend/rag` 与 `docs` 文档目录，当前已提供 ingest、retrieve、answer 的接口骨架，后续可接入文档清洗、向量检索、引用输出和模型回答。
 - **游戏整合**：已接入两套量子计算教育游戏 Demo，并通过 `/api/quantum-game` 接口统一管理状态。
 - **量子反馈**：Game 1 展示目标概率匹配，Game 2 使用 Qiskit backend 计算真实量子态 fidelity 并参与计分。
@@ -115,8 +120,9 @@ quantum-edu-platform/
 - `pages/AccountPage.jsx`：账号与个人学习记忆管理页面。
 - `auth.jsx`：保存登录状态，并为问答和记忆请求附加身份令牌。
 - `i18n.jsx`：首页、导航、问答与账号页的中英文文案。
-- `pages/GamePage.jsx`：游戏整合页，包含游戏大厅、两个游戏的主要界面、规则页、商店、开包动画和状态刷新逻辑。
-- `pages/GamePage.css`：游戏页面样式，包含工作台布局、卡牌、概率图、规则页、roulette、pack opening 等视觉效果。
+- `pages/GamePage.jsx`：小黑网站嵌入页，提供同站 iframe、独立打开和全屏入口。
+- `pages/GamePage.css`：嵌入页工具栏与响应式布局。
+- `scripts/build-xiaohei.mjs`：独立构建子模块、适配资源子路径及同步上游。
 - `components/NavBar.jsx`：前端公共导航组件。
 
 ### games
@@ -177,7 +183,7 @@ RAG 智能问答系统是量智启学的重要产品方向之一。它的目标�
 
 环境要求：
 
-- Node.js 18 或更高版本。
+- Node.js 22.12 或更高版本，建议 Node.js 24 LTS（小黑子应用使用 Vite 7）。
 - Python 3.10 或更高版本（后端使用了现代类型标注语法，Python 3.8 无法直接运行）。
 
 ### 1. 启动后端（FastAPI）
@@ -276,7 +282,7 @@ npm.cmd run build
 
 ## 开发说明
 
-- 前端游戏页使用相对 API base：`/api/quantum-game`；本地开发时由 Vite proxy 转发到后端默认 `8000` 端口。
+- 当前游戏页加载 `/games/xiaohei/` 静态子应用，无需游戏后端；旧版 `/api/quantum-game` 接口继续保留，本地由 Vite proxy 转发到后端 `8000` 端口。
 - 后端游戏状态当前保存在进程内存中，刷新页面后可继续读取当前 active game，但重启后端会丢失状态。
 - `games/` 下保留了不同阶段的游戏原型。Web 版主要通过 `backend/api/game_routes.py` 接入核心逻辑。
 - `backend/rag/` 是智能问答系统的核心预留模块，目前提供最小接口骨架，后续重点是补齐文档处理、检索和回答链路。

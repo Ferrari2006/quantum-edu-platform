@@ -1,0 +1,47 @@
+name: Update XiaoHei website
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-xiaohei
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            games/xiaohei-web/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run sync:xiaohei
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: codex/update-xiaohei
+          add-paths: games/xiaohei-web
+          commit-message: 'chore: update XiaoHei website'
+          title: 'chore: update XiaoHei website'
+          body: |
+            Update the pinned XiaoHei website to upstream main.
+
+            Validation: upstream TypeScript check, XiaoHei build, and platform production build.
+            Review the game page and merge to adopt this version; deployment follows the platform's normal process.

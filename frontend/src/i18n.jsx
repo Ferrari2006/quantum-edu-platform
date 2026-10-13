@@ -47,7 +47,7 @@ export const copy = {
         {
           kicker: "03 · GAME LAB",
           title: "游戏实验室",
-          text: "用量子门、目标态与保真度，把抽象知识变成策略。",
+          text: "跟小黑上一班夜班，通过量子线路维修试玩认识量子门。",
           action: "开始沉浸体验 →",
         },
       ],
@@ -136,7 +136,7 @@ export const copy = {
         {
           kicker: "03 · GAME LAB",
           title: "Game Laboratory",
-          text: "Turn gates, target states, and fidelity into playable strategy.",
+          text: "Join XiaoHei on the night shift and explore quantum gates through a circuit-repair demo.",
           action: "Start the experience →",
         },
       ],

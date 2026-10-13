@@ -1,0 +1,4 @@
+[submodule "games/xiaohei-web"]
+	path = games/xiaohei-web
+	url = https://github.com/bevjaemiverse/XiaoHeiNightShift-web.git
+	branch = main

@@ -4,8 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/build-xiaohei.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-xiaohei.mjs",
     "build": "vite build",
+    "build:xiaohei": "node scripts/build-xiaohei.mjs",
+    "sync:xiaohei": "node scripts/build-xiaohei.mjs --sync",
     "preview": "vite preview"
   },
   "dependencies": {
