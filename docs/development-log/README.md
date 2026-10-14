@@ -17,6 +17,9 @@
 | 09 | [引导式线路实验与自动验收](09-guided-circuit-labs.md) | 已完成MVP |
 | 10 | [实验任务进度与最佳成绩](10-lab-mission-progress.md) | 已完成MVP |
 | 11 | [学习平台整合与界面优化](11-learner-platform-ui.md) | 本地整合与UI第一轮完成 |
+| 12 | [预览核对与功能介绍归档](12-preview-review-and-documentation.md) | 已核对页面与关键接口 |
+
+对外介绍与现场演示请先阅读 [平台介绍与当前功能](../platform-overview.md)。各阶段“完成”表示当时对应范围完成，不表示模型、内容审校及公网部署全部完成。
 
 ## 长期上下文
 

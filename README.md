@@ -1,5 +1,12 @@
 # Quantum Edu Platform（量智启学）
 
+## 当前版本介绍与开发记录（2026-10-14）
+
+面向汇报和交接的最新说明见 [平台介绍与功能清单](docs/platform-overview.md)，包括各页面已实现能力、实际验证范围、演示顺序和待完成事项。
+历史阶段见 [开发日志索引](docs/development-log/README.md)，本次检查见 [预览核对记录](docs/development-log/12-preview-review-and-documentation.md)。
+当前整合版本位于 `codex/learner-platform-ui`：已结合学习资料、六阶段路径、线路实验、学习档案和小黑网站入口；尚未合并main或部署公网。
+本机数据为21个学习主题、5篇示例文章、36份检索语料和289个索引片段；AI回答当前缺少模型密钥。索引需在部署环境重新建立。
+
 > In the quantum realm, the house always loses... if you can maintain coherence.
 
 量智启学（Quantum Edu Platform）是一个面向量子计算启蒙、智能问答与游戏化学习的平台型项目。项目采用前后端分离结构，以 `FastAPI` 作为后端入口，以 `Vite + React` 作为前端承载界面，并将 RAG 智能问答系统、垂直领域量子知识库、量子计算科普游戏统一整合到同一平台中，便于后续继续扩展知识库、学习路径推荐、量子后端能力以及更多交互式教学模块。
