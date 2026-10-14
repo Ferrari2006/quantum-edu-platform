@@ -47,7 +47,7 @@ export const copy = {
         {
           kicker: "03 · GAME LAB",
           title: "游戏实验室",
-          text: "跟小黑上一班夜班，通过量子线路维修试玩认识量子门。",
+          text: "探索小黑夜班与女巫球铺的故事、量子门演示和微信游戏入口。",
           action: "开始沉浸体验 →",
         },
       ],
@@ -136,7 +136,7 @@ export const copy = {
         {
           kicker: "03 · GAME LAB",
           title: "Game Laboratory",
-          text: "Join XiaoHei on the night shift and explore quantum gates through a circuit-repair demo.",
+          text: "Explore XiaoHei Night Shift and the Quantum Orb Shop: stories, quantum gate demos and WeChat game entries.",
           action: "Start the experience →",
         },
       ],
